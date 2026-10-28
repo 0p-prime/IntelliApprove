@@ -117,6 +117,94 @@ export interface ApplicationDocument {
   verified_at?: string;
 }
 
+export interface DocumentItem {
+  id: number;
+  institution_id: number;
+  institution_name?: string;
+  institution_type?: string;
+  state?: string;
+  region_id?: number;
+  region_name?: string;
+  application_id?: number;
+  doc_type: string;
+  issue_date: string;
+  expiry_date?: string | null;
+  status: string;
+  verification_status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED' | string;
+  validity_status: 'VALID' | 'EXPIRING_SOON' | 'CRITICAL' | 'EXPIRED';
+  days_remaining: number;
+  days_expired: number;
+  is_expired: boolean;
+  is_critical: boolean;
+  is_expiring_soon: boolean;
+  color_code: string;
+  renewal_of_id?: number | null;
+  has_renewals?: boolean;
+  file_id?: number;
+  file_name: string;
+  file_url: string;
+  file_size_kb: number;
+  sha256_hash?: string;
+  uploaded_at: string;
+  verified_by_user_id?: number;
+  verifier_name?: string;
+  verified_at?: string;
+  remarks?: string;
+  verification_remarks?: string;
+  audit_trail?: any[];
+}
+
+export interface DocumentExpiringSummary {
+  expired: number;
+  next_30_days: number;
+  next_60_days: number;
+  next_90_days: number;
+  safe_over_90_days: number;
+  total_documents: number;
+  total_with_expiry: number;
+}
+
+export interface DocumentTimelineBucket {
+  label: string;
+  color: string;
+  count: number;
+  documents: DocumentItem[];
+}
+
+export interface DocumentExpiryTimelineData {
+  summary: {
+    total: number;
+    expired_count: number;
+    critical_count: number;
+    expiring_soon_count: number;
+    valid_count: number;
+  };
+  buckets: {
+    expired: DocumentTimelineBucket;
+    critical: DocumentTimelineBucket;
+    expiring_soon: DocumentTimelineBucket;
+    valid: DocumentTimelineBucket;
+  };
+}
+
+export interface DocumentRenewalHistory {
+  target_document_id: number;
+  root_document_id: number;
+  total_renewals: number;
+  lineage: DocumentItem[];
+  audit_trail: {
+    id: number;
+    action: string;
+    entity_id: string;
+    actor_id?: number;
+    actor_name: string;
+    actor_role: string;
+    timestamp: string;
+    details: string;
+    hash: string;
+  }[];
+}
+
 export interface ComplianceNormRule {
   id: number;
   rule_code: string;
@@ -350,6 +438,42 @@ export interface Alert {
   recipient_role?: string;
   is_read: boolean;
   created_at: string;
+  category?: string;
+  link?: string;
+}
+
+export interface SystemClock {
+  id: number;
+  simulated_date: string;
+  is_simulated: boolean;
+  real_date: string;
+  delta_days: number;
+}
+
+export interface EscalationItem {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  application_id?: number;
+  application_number: string;
+  institution_name: string;
+  from_role: string;
+  escalated_to_role: string;
+  escalation_reason: string;
+  escalation_level: number;
+  created_at: string;
+  resolved_at?: string | null;
+}
+
+export interface AlertRuleItem {
+  id: number;
+  category: string;
+  trigger_type: string;
+  offset_days: number;
+  severity: string;
+  escalation_level: number;
+  notify_roles_json: string;
+  is_active: boolean;
 }
 
 export interface AuditLog {

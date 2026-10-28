@@ -406,11 +406,15 @@ class Document(Base):
     file_id = Column(Integer, ForeignKey("files.id", ondelete="SET NULL"), nullable=True)
     verification_status = Column(String(50), default="PENDING", nullable=False)  # PENDING, VERIFIED, REJECTED, EXPIRED
     renewal_of_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    remarks = Column(Text, nullable=True)
+    verified_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    verified_at = Column(DateTime, nullable=True)
     
     # Relationships
     institution = relationship("Institution", back_populates="documents")
     file = relationship("FileRecord")
     parent_document = relationship("Document", remote_side=[id], foreign_keys=[renewal_of_id])
+    verifier = relationship("User", foreign_keys=[verified_by])
 
     @property
     def status(self) -> str:
@@ -419,6 +423,10 @@ class Document(Base):
     @status.setter
     def status(self, val: str):
         self.verification_status = val
+
+    @property
+    def verification_remarks(self) -> Optional[str]:
+        return self.remarks or ("Verified by regional officer" if self.verification_status == "VERIFIED" else None)
 
     @property
     def file_name(self) -> str:

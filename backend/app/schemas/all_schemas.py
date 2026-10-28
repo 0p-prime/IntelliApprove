@@ -166,18 +166,33 @@ class AcademicProgramSchema(BaseModel):
 class DocumentOut(BaseModel):
     id: int
     institution_id: Optional[int] = None
+    institution_name: Optional[str] = None
+    institution_type: Optional[str] = None
+    state: Optional[str] = None
+    region_id: Optional[int] = None
+    region_name: Optional[str] = None
     application_id: Optional[int] = 1
     doc_type: str
     file_name: Optional[str] = "document.pdf"
     file_url: Optional[str] = "/files/doc.pdf"
     file_size_kb: Optional[int] = 1024
+    sha256_hash: Optional[str] = None
     uploaded_at: Optional[datetime] = None
     issue_date: Optional[datetime] = None
     expiry_date: Optional[datetime] = None
     status: Optional[str] = "PENDING"
     verification_status: Optional[str] = "PENDING"
+    validity_status: Optional[str] = "VALID"
+    days_remaining: Optional[int] = None
+    days_expired: Optional[int] = None
+    is_expired: Optional[bool] = False
+    color_code: Optional[str] = "#10B981"
+    renewal_of_id: Optional[int] = None
+    has_renewals: Optional[bool] = False
     verification_remarks: Optional[str] = None
+    remarks: Optional[str] = None
     verified_by_user_id: Optional[int] = None
+    verifier_name: Optional[str] = None
     verified_at: Optional[datetime] = None
 
     class Config:
@@ -400,6 +415,77 @@ class AlertOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class NotificationOut(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    title: str
+    message: str
+    category: str
+    severity: str
+    link: Optional[str] = None
+    is_read: bool
+    created_at: datetime
+    channel: str = "IN_APP"
+    recipient_role: Optional[str] = None
+    application_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EscalationOut(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: int
+    level: int
+    escalated_to: str
+    reason: str
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+    entity_ref: Optional[str] = None
+    institution_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class AlertRuleOut(BaseModel):
+    id: int
+    category: str
+    trigger_type: str
+    offset_days: int
+    severity: str
+    escalation_level: int
+    notify_roles_json: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+class AlertRuleUpdate(BaseModel):
+    category: Optional[str] = None
+    trigger_type: Optional[str] = None
+    offset_days: Optional[int] = None
+    severity: Optional[str] = None
+    escalation_level: Optional[int] = None
+    notify_roles_json: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SystemClockOut(BaseModel):
+    id: int
+    simulated_date: datetime
+    is_simulated: bool
+    real_date: datetime
+    delta_days: float
+
+    class Config:
+        from_attributes = True
+
+class SystemClockAdvanceIn(BaseModel):
+    days: Optional[int] = 0
+    hours: Optional[int] = 0
+
+class SystemClockSetIn(BaseModel):
+    target_date: datetime
 
 class AuditLogOut(BaseModel):
     id: int

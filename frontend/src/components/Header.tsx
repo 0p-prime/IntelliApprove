@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AlertsDrawer } from './AlertsDrawer';
+import { TimeTravelWidget } from './TimeTravelWidget';
 import { apiRequest } from '../api/client';
 import { Alert } from '../types';
 
@@ -137,6 +138,9 @@ export const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSid
 
           {/* Right: Role Badge, Quick Demo Switcher, Notification Bell & Logout */}
           <div className="flex items-center gap-2.5 sm:gap-3.5">
+            {/* Time-Travel Demo Clock Controller */}
+            <TimeTravelWidget />
+
             {/* Prominent Role Badge in Top Bar */}
             <div className="flex items-center gap-1.5">
               <span

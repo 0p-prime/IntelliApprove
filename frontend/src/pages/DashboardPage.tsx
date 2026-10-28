@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  AlertOctagon,
   Building2,
   ArrowRight,
   TrendingUp,
@@ -45,7 +46,8 @@ import {
   RegionPerformanceItem,
   OfficerWorkloadItem,
   BottleneckItem,
-  UpcomingDeadlineItem
+  UpcomingDeadlineItem,
+  DocumentExpiringSummary
 } from '../types';
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { ErrorState } from '../components/States';
@@ -64,6 +66,7 @@ export const DashboardPage: React.FC = () => {
   const [workloadData, setWorkloadData] = useState<OfficerWorkloadItem[]>([]);
   const [bottleneckData, setBottleneckData] = useState<BottleneckItem[]>([]);
   const [deadlinesData, setDeadlinesData] = useState<UpcomingDeadlineItem[]>([]);
+  const [docExpiringSummary, setDocExpiringSummary] = useState<DocumentExpiringSummary | null>(null);
 
   // State flags
   const [loading, setLoading] = useState<boolean>(true);
@@ -109,7 +112,8 @@ export const DashboardPage: React.FC = () => {
         regionRes,
         workloadRes,
         bottleneckRes,
-        deadlinesRes
+        deadlinesRes,
+        docSummaryRes
       ] = await Promise.all([
         apiRequest<DashboardSummaryData>(`/dashboard/summary${qStr}`),
         apiRequest<StageFunnelItem[]>(`/dashboard/stage-funnel${qStr}`),
@@ -117,7 +121,8 @@ export const DashboardPage: React.FC = () => {
         apiRequest<RegionPerformanceItem[]>(`/dashboard/region-performance${qStr}`),
         apiRequest<OfficerWorkloadItem[]>(`/dashboard/officer-workload${qStr}`),
         apiRequest<BottleneckItem[]>(`/dashboard/bottlenecks${qStr}`),
-        apiRequest<UpcomingDeadlineItem[]>(`/dashboard/upcoming-deadlines?days=14`)
+        apiRequest<UpcomingDeadlineItem[]>(`/dashboard/upcoming-deadlines?days=14`),
+        apiRequest<DocumentExpiringSummary>(`/documents/expiring-summary`).catch(() => null)
       ]);
 
       setSummaryData(summaryRes);
@@ -127,6 +132,7 @@ export const DashboardPage: React.FC = () => {
       setWorkloadData(workloadRes);
       setBottleneckData(bottleneckRes);
       setDeadlinesData(deadlinesRes);
+      if (docSummaryRes) setDocExpiringSummary(docSummaryRes);
       setLastUpdated(new Date());
       setCountdown(30);
     } catch (err: any) {
@@ -766,6 +772,80 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Document & Lease Validity Monitoring (30 / 60 / 90 Days) Widget */}
+          {docExpiringSummary && (
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-700" />
+                    Statutory Document & Lease Expiries (30 / 60 / 90 Days Window)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Institutional land leases, municipal safety approvals, and fire NOCs approaching expiry.
+                  </p>
+                </div>
+                <Link
+                  to="/documents"
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                >
+                  <span>Open Repository</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Link
+                  to="/documents?validity_status=EXPIRED"
+                  className="p-3.5 bg-red-50/70 border border-red-200 rounded-xl hover:bg-red-50 transition-colors block"
+                >
+                  <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider flex items-center gap-1">
+                    <AlertOctagon className="w-3.5 h-3.5 text-red-600" />
+                    Expired Deeds
+                  </span>
+                  <div className="text-2xl font-black text-red-700 mt-1 font-mono">{docExpiringSummary.expired}</div>
+                  <div className="text-[10px] text-red-600 font-medium mt-0.5">SLA Non-Compliance</div>
+                </Link>
+
+                <Link
+                  to="/documents?validity_status=CRITICAL"
+                  className="p-3.5 bg-rose-50/70 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors block"
+                >
+                  <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-rose-600" />
+                    Due ≤ 30 Days
+                  </span>
+                  <div className="text-2xl font-black text-rose-700 mt-1 font-mono">{docExpiringSummary.next_30_days}</div>
+                  <div className="text-[10px] text-rose-600 font-medium mt-0.5">Urgent Legal Review</div>
+                </Link>
+
+                <Link
+                  to="/documents?validity_status=EXPIRING_SOON"
+                  className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl hover:bg-amber-50 transition-colors block"
+                >
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    Due ≤ 60 Days
+                  </span>
+                  <div className="text-2xl font-black text-amber-700 mt-1 font-mono">{docExpiringSummary.next_60_days}</div>
+                  <div className="text-[10px] text-amber-600 font-medium mt-0.5">Renewal Warnings</div>
+                </Link>
+
+                <Link
+                  to="/documents?validity_status=EXPIRING_SOON"
+                  className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors block"
+                >
+                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    Due ≤ 90 Days
+                  </span>
+                  <div className="text-2xl font-black text-blue-700 mt-1 font-mono">{docExpiringSummary.next_90_days}</div>
+                  <div className="text-[10px] text-blue-600 font-medium mt-0.5">Advance Reminders</div>
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* Row 4: Upcoming Deadlines (Next 14 Days across all 4 Modules) */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">

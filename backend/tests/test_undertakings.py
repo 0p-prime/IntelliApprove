@@ -48,6 +48,7 @@ def cleanup_undertakings_test_data():
         db = SessionLocal()
         try:
             for uid in list(CREATED_TEST_UND_IDS):
+                db.query(AuditLog).filter(AuditLog.entity_id == str(uid)).delete(synchronize_session=False)
                 und = db.query(Undertaking).filter(Undertaking.id == uid).first()
                 if und:
                     db.delete(und)
@@ -161,9 +162,21 @@ def test_upload_evidence_with_sha256_and_validation(client: TestClient, db_sessi
     admin_user = db_session.query(User).filter(User.role == UserRole.ADMIN.value).first()
     headers = get_auth_header(admin_user)
 
-    # Find a pending undertaking
+    # Find or create a pending undertaking
     pending_u = db_session.query(Undertaking).filter(Undertaking.status == "PENDING").first()
-    assert pending_u is not None
+    if not pending_u:
+        app_obj = db_session.query(Application).first()
+        pending_u = Undertaking(
+            institution_id=app_obj.institution_id,
+            application_id=app_obj.id,
+            condition_text="Test Pending Undertaking for evidence upload",
+            due_date=datetime.now(timezone.utc) + timedelta(days=30),
+            status="PENDING"
+        )
+        db_session.add(pending_u)
+        db_session.commit()
+        db_session.refresh(pending_u)
+        CREATED_TEST_UND_IDS.append(pending_u.id)
 
     # 1. Invalid file extension rejected
     bad_file = ("script.exe", b"binary executable content", "application/octet-stream")
@@ -214,15 +227,19 @@ def test_verify_undertaking_evidence_mandatory_remarks(client: TestClient, db_se
     assert ro_user is not None
     headers = get_auth_header(ro_user)
 
-    # Prepare an undertaking in SUBMITTED status
-    u = db_session.query(Undertaking).filter(
-        Undertaking.status == "PENDING"
-    ).first()
-    assert u is not None
-
-    # Simulate submission
-    u.status = "SUBMITTED"
+    # Prepare a dedicated undertaking in SUBMITTED status
+    app_obj = db_session.query(Application).first()
+    u = Undertaking(
+        institution_id=app_obj.institution_id,
+        application_id=app_obj.id,
+        condition_text="Test Undertaking for verification remarks",
+        due_date=datetime.now(timezone.utc) + timedelta(days=30),
+        status="SUBMITTED"
+    )
+    db_session.add(u)
     db_session.commit()
+    db_session.refresh(u)
+    CREATED_TEST_UND_IDS.append(u.id)
 
     # 1. Missing remarks fails
     bad_resp = client.post(
@@ -267,11 +284,19 @@ def test_reject_undertaking_evidence_mandatory_remarks(client: TestClient, db_se
     assert ro_user is not None
     headers = get_auth_header(ro_user)
 
-    # Prepare an undertaking in SUBMITTED status
-    u = db_session.query(Undertaking).filter(
-        Undertaking.status == "PENDING"
-    ).first()
-    assert u is not None
+    # Prepare a dedicated undertaking in SUBMITTED status
+    app_obj = db_session.query(Application).first()
+    u = Undertaking(
+        institution_id=app_obj.institution_id,
+        application_id=app_obj.id,
+        condition_text="Test Undertaking for rejection remarks",
+        due_date=datetime.now(timezone.utc) + timedelta(days=30),
+        status="SUBMITTED"
+    )
+    db_session.add(u)
+    db_session.commit()
+    db_session.refresh(u)
+    CREATED_TEST_UND_IDS.append(u.id)
 
     # 1. Missing remarks fails
     bad_resp = client.post(

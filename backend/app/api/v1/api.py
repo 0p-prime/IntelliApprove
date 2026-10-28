@@ -15,7 +15,8 @@ from app.api.v1 import (
     analytics,
     dashboard,
     evc,
-    institutions
+    institutions,
+    system_clock
 )
 
 api_router = APIRouter()
@@ -29,6 +30,7 @@ api_router.include_router(compliance.router, prefix="/compliance", tags=["Compli
 api_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 api_router.include_router(undertakings.router, prefix="/undertakings", tags=["Undertakings"])
 api_router.include_router(alerts.router, prefix="/alerts", tags=["Alerts & Escalations"])
+api_router.include_router(system_clock.router, prefix="/system/clock", tags=["System Clock Simulation"])
 api_router.include_router(config.router, prefix="/config", tags=["Dynamic Configuration"])
 api_router.include_router(audit.router, prefix="/audit", tags=["Audit Trail"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Dashboard"])
