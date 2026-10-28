@@ -44,7 +44,6 @@ def cleanup_document_test_data():
         db = SessionLocal()
         try:
             for did in list(CREATED_TEST_DOC_IDS):
-                db.query(AuditLog).filter(AuditLog.entity_id == str(did)).delete(synchronize_session=False)
                 doc = db.query(Document).filter(Document.id == did).first()
                 if doc:
                     db.delete(doc)

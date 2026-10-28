@@ -16,12 +16,14 @@ from app.api.v1 import (
     dashboard,
     evc,
     institutions,
-    system_clock
+    system_clock,
+    admin
 )
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(admin.router, prefix="/admin", tags=["Admin Operations"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Real-Time Dashboard"])
 api_router.include_router(evc.router, prefix="/evc", tags=["EVC Module"])
 api_router.include_router(applications.router, prefix="/applications", tags=["Applications"])

@@ -489,6 +489,53 @@ export interface AuditLog {
   new_value?: string;
   details?: string;
   ip_address?: string;
+  prev_hash?: string;
+  hash?: string;
+}
+
+export interface ChainVerificationResult {
+  is_valid: boolean;
+  total_blocks: number;
+  tampered_block_id?: number | null;
+  broken_links_count: number;
+  genesis_hash: string;
+  head_hash: string | null;
+  verification_duration_ms: number;
+  verified_at: string;
+  algorithm: string;
+  status: string;
+}
+
+export interface DeficiencyReportData {
+  summary: {
+    total_deficiencies: number;
+    rectified_count: number;
+    pending_count: number;
+    rectification_rate: number;
+    critical_unresolved: number;
+    major_unresolved: number;
+    minor_unresolved: number;
+  };
+  category_breakdown: Array<{ category: string; count: number }>;
+  rule_rankings: Array<{
+    rule_code: string;
+    name: string;
+    category: string;
+    severity: string;
+    deficiency_count: number;
+  }>;
+  regional_deficiencies: Array<{ region: string; deficiency_count: number }>;
+  top_deficient_institutions: Array<{
+    application_id: number;
+    ref_no: string;
+    institution_name: string;
+    state: string;
+    region: string;
+    deficiency_count: number;
+    compliance_score: number;
+    current_stage: string;
+    status: string;
+  }>;
 }
 
 export interface DashboardMetrics {

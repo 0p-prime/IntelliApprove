@@ -48,7 +48,6 @@ def cleanup_undertakings_test_data():
         db = SessionLocal()
         try:
             for uid in list(CREATED_TEST_UND_IDS):
-                db.query(AuditLog).filter(AuditLog.entity_id == str(uid)).delete(synchronize_session=False)
                 und = db.query(Undertaking).filter(Undertaking.id == uid).first()
                 if und:
                     db.delete(und)
@@ -268,7 +267,7 @@ def test_verify_undertaking_evidence_mandatory_remarks(client: TestClient, db_se
     audit = db_session.query(AuditLog).filter(
         AuditLog.action == "UNDERTAKING_VERIFIED",
         AuditLog.entity_id == str(u.id)
-    ).first()
+    ).order_by(AuditLog.id.desc()).first()
     assert audit is not None
     assert valid_remarks in audit.details
 
@@ -324,7 +323,7 @@ def test_reject_undertaking_evidence_mandatory_remarks(client: TestClient, db_se
     audit = db_session.query(AuditLog).filter(
         AuditLog.action == "UNDERTAKING_REJECTED",
         AuditLog.entity_id == str(u.id)
-    ).first()
+    ).order_by(AuditLog.id.desc()).first()
     assert audit is not None
     assert "structural drawing" in audit.details
 

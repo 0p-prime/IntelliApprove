@@ -500,6 +500,8 @@ class AuditLogOut(BaseModel):
     new_value: Optional[str] = None
     details: Optional[str] = None
     ip_address: Optional[str] = None
+    prev_hash: Optional[str] = None
+    hash: Optional[str] = None
 
     class Config:
         from_attributes = True

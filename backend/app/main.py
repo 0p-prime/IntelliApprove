@@ -17,6 +17,7 @@ from app.api.v1.undertakings import router as undertakings_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.alerts import router as alerts_router
 from app.api.v1.system_clock import router as system_clock_router
+from app.api.v1.admin import router as admin_router
 from app.services.scheduler_service import start_scheduler, shutdown_scheduler
 from app.seed import seed_database
 
@@ -62,6 +63,7 @@ app.include_router(alerts_router, prefix="/alerts", tags=["Alerts Direct"])
 app.include_router(alerts_router, prefix="/notifications", tags=["Notifications Direct"])
 app.include_router(system_clock_router, prefix="/system/clock", tags=["System Clock Direct"])
 app.include_router(system_clock_router, prefix="/clock", tags=["Clock Direct"])
+app.include_router(admin_router, prefix="/admin", tags=["Admin Direct"])
 
 @app.get("/")
 def root():

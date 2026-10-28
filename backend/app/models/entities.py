@@ -120,15 +120,39 @@ class Institution(Base):
 
     @property
     def total_land_acres(self) -> float:
-        return 7.5 if not self.is_new else 5.0
+        if self.is_new:
+            return 5.0
+        if self.id in (3, 15):
+            return 4.2  # Below standard norm of 7.5
+        return 8.5 if self.id == 1 else 7.5
 
     @property
     def total_builtup_sqm(self) -> float:
-        return 12500.0
+        if self.id in (7, 19):
+            return 7200.0  # Below required 10 sqm/student for 800+ students
+        return 14500.0 if self.id == 1 else 12500.0
 
     @property
     def total_computers(self) -> int:
-        return 280
+        if self.id in (9, 22):
+            return 110  # Below required 0.25 (1 PC/4 students)
+        return 340 if self.id == 1 else 280
+
+    @property
+    def has_anti_ragging_committee(self) -> bool:
+        return self.id not in (4, 12, 23)
+
+    @property
+    def has_icc_committee(self) -> bool:
+        return self.id not in (5, 14, 25)
+
+    @property
+    def has_grievance_committee(self) -> bool:
+        return self.id not in (6, 17)
+
+    @property
+    def has_barrier_free_environment(self) -> bool:
+        return self.id not in (3, 8, 21)
 
     @property
     def established_year(self) -> int:
@@ -177,6 +201,8 @@ class Application(Base):
     stage_entered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     due_date = Column(DateTime, nullable=True, index=True)
     risk_score = Column(Float, default=0.0, nullable=False)
+    compliance_score = Column(Float, default=85.0, nullable=False)
+    deficiency_count = Column(Integer, default=0, nullable=False)
     
     # Relationships
     institution = relationship("Institution", back_populates="applications")
@@ -186,6 +212,8 @@ class Application(Base):
     stage_history = relationship("StageHistory", back_populates="application", cascade="all, delete-orphan")
     evc_schedules = relationship("EVCSchedule", back_populates="application", cascade="all, delete-orphan")
     undertakings = relationship("Undertaking", back_populates="application", cascade="all, delete-orphan")
+    deficiencies_records = relationship("DeficiencyRecord", back_populates="application", cascade="all, delete-orphan")
+    programs_records = relationship("AcademicProgram", back_populates="application", cascade="all, delete-orphan")
 
     @property
     def application_number(self) -> str:
@@ -269,11 +297,11 @@ class Application(Base):
 
     @property
     def programs(self):
-        return []
+        return self.programs_records or []
 
     @property
     def deficiencies(self):
-        return []
+        return self.deficiencies_records or []
 
     @property
     def current_stage_obj(self):
@@ -487,6 +515,7 @@ class Notification(Base):
     is_read = Column(Boolean, default=False, nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     channel = Column(String(50), default="IN_APP", nullable=False)  # IN_APP, EMAIL, SMS
+    idempotency_key = Column(String(255), nullable=True, index=True)
     
     def __init__(self, **kwargs):
         app_id = kwargs.pop("application_id", None)
@@ -563,7 +592,52 @@ class SystemClock(Base):
     id = Column(Integer, primary_key=True, index=True)
     simulated_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-class AcademicProgram:
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+class ComplianceNormRule(Base):
+    __tablename__ = "compliance_norm_rules"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rule_code = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=False)  # FACULTY, INFRASTRUCTURE, GOVERNANCE, CADRE
+    description = Column(Text, nullable=False)
+    standard_value = Column(Float, nullable=False)
+    threshold_margin_percent = Column(Float, default=0.0, nullable=False)
+    unit = Column(String(50), default="ratio", nullable=False)
+    severity = Column(String(50), default="CRITICAL", nullable=False)  # CRITICAL, MAJOR, MINOR
+    is_active = Column(Boolean, default=True, nullable=False)
+
+class AcademicProgram(Base):
+    __tablename__ = "academic_programs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    program_name = Column(String(255), nullable=False)
+    level = Column(String(50), default="Undergraduate", nullable=False)
+    approved_intake_prev_year = Column(Integer, default=60, nullable=False)
+    requested_intake = Column(Integer, default=60, nullable=False)
+    faculty_count = Column(Integer, default=4, nullable=False)
+    total_enrolled = Column(Integer, default=240, nullable=False)
+    cadre_ratio = Column(String(50), default="1:2:6", nullable=False)
+
+    # Relationships
+    application = relationship("Application", back_populates="programs_records")
+
+class DeficiencyRecord(Base):
+    __tablename__ = "deficiency_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    rule_id = Column(Integer, ForeignKey("compliance_norm_rules.id", ondelete="SET NULL"), nullable=True)
+    rule_code = Column(String(100), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    severity = Column(String(50), default="CRITICAL", nullable=False)
+    flagged_by = Column(String(50), default="SYSTEM", nullable=False)  # SYSTEM, OFFICER
+    is_rectified = Column(Boolean, default=False, nullable=False)
+    rectification_proof = Column(Text, nullable=True)
+    rectified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Relationships
+    application = relationship("Application", back_populates="deficiencies_records")
+    rule = relationship("ComplianceNormRule")

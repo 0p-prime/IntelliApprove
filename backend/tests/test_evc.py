@@ -134,6 +134,9 @@ def test_evc_queue_prioritizes_new_institutions(client: TestClient, db_session: 
     assert admin_user is not None
     headers = get_auth_header(admin_user)
 
+    # Ensure clock is reset so active queue statuses are not marked overdue by prior time-travel tests
+    client.post("/admin/reset-clock", headers=headers)
+
     resp = client.get("/evc/queue", headers=headers)
     assert resp.status_code == 200
     queue = resp.json()

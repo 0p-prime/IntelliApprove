@@ -59,6 +59,7 @@ def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_
             details=f"Failed login attempt for email: {login_data.email}",
             ip_address=get_client_ip(request)
         )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -103,6 +104,7 @@ def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_
         details=f"User {user.email} logged in with role {user.role}.",
         ip_address=get_client_ip(request)
     )
+    db.commit()
     
     return LoginResponse(
         access_token=access_token,

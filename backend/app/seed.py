@@ -33,6 +33,9 @@ from app.models.entities import (
     Escalation,
     AuditLog,
     SystemClock,
+    ComplianceNormRule,
+    DeficiencyRecord,
+    AcademicProgram,
 )
 
 DEMO_DEFAULT_PASSWORD = "aicte123"
@@ -54,7 +57,7 @@ def seed_database(reset: bool = False):
 
     try:
         if reset:
-            print("[Seed] Clearing existing data across 15 tables...")
+            print("[Seed] Clearing existing data across tables...")
             # Delete in reverse foreign-key dependency order
             db.query(AuditLog).delete()
             db.query(Escalation).delete()
@@ -64,9 +67,12 @@ def seed_database(reset: bool = False):
             db.query(Document).delete()
             db.query(FileRecord).delete()
             db.query(EVCSchedule).delete()
+            db.query(DeficiencyRecord).delete()
+            db.query(AcademicProgram).delete()
             db.query(StageHistory).delete()
             db.query(Application).delete()
             db.query(WorkflowTemplate).delete()
+            db.query(ComplianceNormRule).delete()
             db.query(Institution).delete()
             db.query(User).delete()
             db.query(Region).delete()
@@ -790,6 +796,9 @@ def print_row_counts():
         ("escalations", Escalation),
         ("audit_logs", AuditLog),
         ("system_clock", SystemClock),
+        ("compliance_norm_rules", ComplianceNormRule),
+        ("academic_programs", AcademicProgram),
+        ("deficiency_records", DeficiencyRecord),
     ]
 
     print("=" * 60)

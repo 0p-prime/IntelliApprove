@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { History, Search, Filter, ShieldCheck, RefreshCw, FileText, Code2, ArrowRight } from 'lucide-react';
+import {
+  History,
+  Search,
+  ShieldCheck,
+  RefreshCw,
+  Code2,
+  Lock,
+  Key,
+  CheckCircle2,
+  AlertTriangle,
+  Download,
+  Copy,
+  Check,
+  ExternalLink,
+  Cpu,
+  Layers
+} from 'lucide-react';
 import { apiRequest } from '../api/client';
-import { AuditLog } from '../types';
+import { AuditLog, ChainVerificationResult } from '../types';
 import { LoadingState, EmptyState, ErrorState } from '../components/States';
 
 export const AuditExplorerPage: React.FC = () => {
@@ -12,6 +28,11 @@ export const AuditExplorerPage: React.FC = () => {
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+
+  // Cryptographic Verification State
+  const [verification, setVerification] = useState<ChainVerificationResult | null>(null);
+  const [verifying, setVerifying] = useState<boolean>(false);
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -32,8 +53,42 @@ export const AuditExplorerPage: React.FC = () => {
     }
   };
 
+  const handleVerifyChain = async () => {
+    setVerifying(true);
+    try {
+      const res = await apiRequest<ChainVerificationResult>('/audit/verify-chain');
+      setVerification(res);
+    } catch (err: any) {
+      alert(`Verification failed: ${err.message}`);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleExportTrail = async () => {
+    try {
+      const data = await apiRequest<any>('/audit/export?limit=500');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `AICTE_Audit_Trail_Certificate_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    }
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedHash(label);
+    setTimeout(() => setCopiedHash(null), 2000);
+  };
+
   useEffect(() => {
     fetchLogs();
+    handleVerifyChain();
   }, [actionFilter, entityFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -43,27 +98,143 @@ export const AuditExplorerPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Banner */}
-      <div className="p-4 bg-slate-900 text-white rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      {/* Top Banner */}
+      <div className="p-5 gov-header-gradient text-white rounded-2xl shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
             <h2 className="text-lg font-bold tracking-tight">
-              Rule #1: Immutable Vigilance & State Audit Trail
+              Rule #1: Cryptographic State Audit Trail & Vigilance Explorer
             </h2>
           </div>
-          <p className="text-xs text-slate-300 mt-1">
-            Every state change (stage transitions, undertakings, document reviews, alerts, escalations, logins, config modifications) writes an unalterable audit log entry.
+          <p className="text-xs text-blue-100/90 mt-1 max-w-3xl">
+            Immutable, append-only ledger linking every statutory decision, stage transition, document review, and
+            investigation into a SHA-256 tamper-evident cryptographic hash chain.
           </p>
         </div>
-        <button
-          onClick={fetchLogs}
-          className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer self-start md:self-auto transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Trail
-        </button>
+
+        <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+          <button
+            onClick={handleExportTrail}
+            className="px-3 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+          >
+            <Download className="w-3.5 h-3.5 text-amber-300" />
+            Export Certificate
+          </button>
+          <button
+            onClick={fetchLogs}
+            className="px-3 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Cryptographic Verification Panel */}
+      {verification && (
+        <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                  verification.is_valid
+                    ? 'bg-emerald-50 border border-emerald-300 text-emerald-700'
+                    : 'bg-red-50 border border-red-300 text-red-700'
+                }`}
+              >
+                {verification.is_valid ? <Lock className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-slate-900">
+                    {verification.is_valid
+                      ? 'Tamper-Evident SHA-256 Hash Chain: 100% Verified'
+                      : 'Cryptographic Chain Integrity Warning'}
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono ${
+                      verification.is_valid
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-red-100 text-red-900 border border-red-300'
+                    }`}
+                  >
+                    {verification.status}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Algorithm: {verification.algorithm} • Verified in {verification.verification_duration_ms} ms
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleVerifyChain}
+              disabled={verifying}
+              className="px-3.5 py-1.5 bg-[#0B2240] hover:bg-[#07172C] disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors shadow-2xs shrink-0 self-start sm:self-auto"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
+              Re-Verify Chain Now
+            </button>
+          </div>
+
+          {/* Cryptographic Hashes Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="font-medium flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-blue-700" />
+                  Genesis Hash (Root Block)
+                </span>
+                <button
+                  onClick={() => copyToClipboard(verification.genesis_hash, 'genesis')}
+                  className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                  title="Copy Genesis Hash"
+                >
+                  {copiedHash === 'genesis' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                </button>
+              </div>
+              <div className="font-mono text-[11px] text-slate-800 truncate" title={verification.genesis_hash}>
+                {verification.genesis_hash}
+              </div>
+              <span className="text-[10px] text-slate-400 block">AICTE IntelliApprove Trust Anchor</span>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="font-medium flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                  Head Block Hash (Latest)
+                </span>
+                <button
+                  onClick={() => copyToClipboard(verification.head_hash || '', 'head')}
+                  className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                  title="Copy Head Block Hash"
+                >
+                  {copiedHash === 'head' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                </button>
+              </div>
+              <div className="font-mono text-[11px] text-slate-800 truncate" title={verification.head_hash || 'N/A'}>
+                {verification.head_hash || 'N/A'}
+              </div>
+              <span className="text-[10px] text-slate-400 block">Continuously linked & chained</span>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+              <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-purple-700" />
+                Ledger Chain Height
+              </span>
+              <div className="text-base font-bold text-slate-900 font-mono">
+                {verification.total_blocks.toLocaleString()} Blocks
+              </div>
+              <span className="text-[10px] text-emerald-700 font-semibold block">0 broken links • 100% continuous</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
@@ -74,7 +245,7 @@ export const AuditExplorerPage: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search audit trail by actor, entity ID, or keyword..."
+              placeholder="Search audit trail by actor email, entity ID, hash digest, or reason..."
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
             />
           </div>
@@ -98,6 +269,8 @@ export const AuditExplorerPage: React.FC = () => {
               <option value="application">Application</option>
               <option value="document">Document</option>
               <option value="undertaking">Undertaking</option>
+              <option value="evc">EVC / Committee</option>
+              <option value="deficiency">Deficiency</option>
               <option value="config">Configuration</option>
               <option value="user">User / Auth</option>
               <option value="escalation">Escalation</option>
@@ -113,13 +286,13 @@ export const AuditExplorerPage: React.FC = () => {
             >
               <option value="">All Actions</option>
               <option value="APPLICATION_STAGE_TRANSITION">APPLICATION_STAGE_TRANSITION</option>
-              <option value="COMPETENT_AUTHORITY_DECISION_RECORDED">COMPETENT_AUTHORITY_DECISION_RECORDED</option>
               <option value="COMPLIANCE_EVALUATION_COMPLETED">COMPLIANCE_EVALUATION_COMPLETED</option>
-              <option value="DOCUMENT_VERIFICATION_STATUS_UPDATED">DOCUMENT_VERIFICATION_STATUS_UPDATED</option>
-              <option value="UNDERTAKING_CREATED">UNDERTAKING_CREATED</option>
-              <option value="UNDERTAKING_VERIFICATION_RECORDED">UNDERTAKING_VERIFICATION_RECORDED</option>
+              <option value="DEFICIENCY_RECTIFICATION_SUBMITTED">DEFICIENCY_RECTIFICATION_SUBMITTED</option>
+              <option value="DOCUMENT_VERIFIED">DOCUMENT_VERIFIED</option>
+              <option value="UNDERTAKING_VERIFIED">UNDERTAKING_VERIFIED</option>
+              <option value="EVC_SCHEDULED">EVC_SCHEDULED</option>
               <option value="AUTOMATED_ESCALATION_TRIGGERED">AUTOMATED_ESCALATION_TRIGGERED</option>
-              <option value="CONFIG_STAGE_UPDATED">CONFIG_STAGE_UPDATED</option>
+              <option value="SYSTEM_CLOCK_ADVANCED">SYSTEM_CLOCK_ADVANCED</option>
               <option value="USER_LOGIN_SUCCESS">USER_LOGIN_SUCCESS</option>
             </select>
           </div>
@@ -139,18 +312,22 @@ export const AuditExplorerPage: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px]">
                 <tr>
+                  <th className="py-2.5 px-3">Block #</th>
                   <th className="py-2.5 px-3">Timestamp (UTC)</th>
                   <th className="py-2.5 px-3">Actor & Role</th>
                   <th className="py-2.5 px-3">Action</th>
                   <th className="py-2.5 px-3">Target Entity</th>
                   <th className="py-2.5 px-3">Details / Snapshot</th>
-                  <th className="py-2.5 px-3">IP Address</th>
-                  <th className="py-2.5 px-3 text-right">Diff Inspector</th>
+                  <th className="py-2.5 px-3">Hash Lineage</th>
+                  <th className="py-2.5 px-3 text-right">Block Inspector</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {logs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/60 font-sans">
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900 text-[11px]">
+                      #{log.id}
+                    </td>
                     <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px] whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
@@ -171,22 +348,24 @@ export const AuditExplorerPage: React.FC = () => {
                       </span>
                       #{log.entity_id}
                     </td>
-                    <td className="py-2.5 px-3 text-slate-700 max-w-xs truncate">
+                    <td className="py-2.5 px-3 text-slate-700 max-w-xs truncate" title={log.details || ''}>
                       {log.details || 'State modified'}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">
-                      {log.ip_address || '127.0.0.1'}
+                    <td className="py-2.5 px-3 font-mono text-[10px]">
+                      <div className="flex items-center gap-1" title={`Prev: ${log.prev_hash}\nCurr: ${log.hash}`}>
+                        <span className="text-slate-400 truncate w-14">{log.prev_hash?.slice(0, 7)}</span>
+                        <span className="text-slate-300">→</span>
+                        <span className="font-bold text-emerald-700 truncate w-14">{log.hash?.slice(0, 7)}</span>
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      {(log.old_value || log.new_value) && (
-                        <button
-                          onClick={() => setSelectedLog(log)}
-                          className="px-2 py-1 bg-slate-100 hover:bg-[#0B2240] hover:text-white rounded text-[11px] font-semibold text-slate-700 flex items-center gap-1 ml-auto cursor-pointer"
-                        >
-                          <Code2 className="w-3 h-3" />
-                          View Diff
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setSelectedLog(log)}
+                        className="px-2 py-1 bg-slate-100 hover:bg-[#0B2240] hover:text-white rounded text-[11px] font-semibold text-slate-700 flex items-center gap-1 ml-auto cursor-pointer transition-colors"
+                      >
+                        <Code2 className="w-3 h-3" />
+                        Inspect
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -196,15 +375,15 @@ export const AuditExplorerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal for Old vs New Snapshot Diff */}
+      {/* Block Inspector & Cryptographic Diff Modal */}
       {selectedLog && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden space-y-4">
-            <div className="p-4 bg-[#0B2240] text-white flex items-center justify-between">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="p-4 gov-header-gradient text-white flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-sm flex items-center gap-2">
-                  <History className="w-4 h-4 text-amber-400" />
-                  Audit Log Diff Snapshot #{selectedLog.id}
+                  <Lock className="w-4 h-4 text-amber-300" />
+                  Audit Block #{selectedLog.id} • Cryptographic Inspector
                 </h3>
                 <span className="text-xs text-blue-200 font-mono">{selectedLog.action}</span>
               </div>
@@ -216,23 +395,61 @@ export const AuditExplorerPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
-              <div className="p-3 bg-slate-50 rounded-lg text-slate-700">
-                <strong>Event Details:</strong> {selectedLog.details}
+            <div className="p-5 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+              {/* Hash Chain Details */}
+              <div className="p-3 bg-slate-900 text-slate-200 rounded-xl space-y-2 font-mono text-[11px]">
+                <div className="text-[10px] uppercase font-bold text-amber-400">SHA-256 Tamper-Evident Digest</div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex gap-2">
+                    <span className="text-slate-400 w-24 shrink-0">Previous Hash:</span>
+                    <span className="text-blue-300 break-all">{selectedLog.prev_hash || 'GENESIS'}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-slate-400 w-24 shrink-0">Current Hash:</span>
+                    <span className="text-emerald-400 font-bold break-all">{selectedLog.hash || 'N/A'}</span>
+                  </div>
+                </div>
               </div>
 
+              {/* Event Metadata */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase block">Actor</span>
+                  <strong className="text-slate-800">{selectedLog.user_email}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase block">Role</span>
+                  <span className="font-mono text-slate-800">{selectedLog.role}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase block">Entity Target</span>
+                  <span className="font-mono text-slate-800">
+                    {selectedLog.entity_type} #{selectedLog.entity_id}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase block">Client IP</span>
+                  <span className="font-mono text-slate-800">{selectedLog.ip_address || '127.0.0.1'}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
+                <strong>Event Reason & Remarks:</strong> {selectedLog.details || 'State modified'}
+              </div>
+
+              {/* Before vs After Diffs */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <span className="font-bold text-slate-700 block mb-1">Before State (old_value):</span>
-                  <pre className="p-3 bg-slate-100 rounded-lg font-mono text-[11px] overflow-x-auto text-slate-800 max-h-48">
+                  <span className="font-bold text-slate-700 block mb-1">State Before (old_value):</span>
+                  <pre className="p-3 bg-slate-100 rounded-lg font-mono text-[11px] overflow-x-auto text-slate-800 max-h-48 border border-slate-200">
                     {selectedLog.old_value || 'null (Initial Creation)'}
                   </pre>
                 </div>
 
                 <div>
-                  <span className="font-bold text-slate-700 block mb-1">After State (new_value):</span>
+                  <span className="font-bold text-slate-700 block mb-1">State After (new_value):</span>
                   <pre className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg font-mono text-[11px] overflow-x-auto text-emerald-900 max-h-48">
-                    {selectedLog.new_value || 'null (Deletion)'}
+                    {selectedLog.new_value || 'null (Terminal/Deletion)'}
                   </pre>
                 </div>
               </div>

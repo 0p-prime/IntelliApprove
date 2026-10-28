@@ -20,6 +20,9 @@ from app.models.entities import (
     Escalation,
     AuditLog,
     SystemClock,
+    ComplianceNormRule,
+    DeficiencyRecord,
+    AcademicProgram,
 )
 
 __all__ = [
@@ -40,4 +43,7 @@ __all__ = [
     "Escalation",
     "AuditLog",
     "SystemClock",
+    "ComplianceNormRule",
+    "DeficiencyRecord",
+    "AcademicProgram",
 ]

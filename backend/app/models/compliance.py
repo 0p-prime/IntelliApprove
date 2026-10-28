@@ -1,11 +1,6 @@
 """
-Compliance module placeholders.
+Compliance and Deficiency models for AICTE Approval Process Handbook (APH) norms.
 """
+from app.models.entities import ComplianceNormRule, DeficiencyRecord, AcademicProgram
 
-class ComplianceNormRule:
-    pass
-
-class DeficiencyRecord:
-    pass
-
-__all__ = ["ComplianceNormRule", "DeficiencyRecord"]
+__all__ = ["ComplianceNormRule", "DeficiencyRecord", "AcademicProgram"]

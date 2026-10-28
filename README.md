@@ -149,13 +149,13 @@ Default password for all demo accounts: **`aicte123`**
 
 ## 7. Database Architecture & Seed Dataset
 
-IntelliApprove implements a 15-table architecture managed via **SQLAlchemy + Alembic migrations**:
+IntelliApprove implements an 18-table architecture managed via **SQLAlchemy + Alembic migrations**:
 
-### Database Tables (15 Core Tables)
+### Database Tables (18 Core Tables)
 1. **`users`**: User identity, role-based access (`INSTITUTION`, `REGIONAL_OFFICER`, `REGIONAL_HEAD`, `BUREAU_OFFICER`, `EVC_MEMBER`, `ADMIN`), regional jurisdiction, salted password hashes.
 2. **`regions`**: 8 official AICTE regions (Northern, Southern, Western, Eastern, Central, South-Western, North-Western, South-Central).
 3. **`institutions`**: 60 AICTE-approved institutions across Indian states, mapped to regions and institution categories (Engineering, Management, Pharmacy, Architecture, Polytechnic).
-4. **`applications`**: 150 applications spanning lifecycle stages (`SUBMITTED`, `SCRUTINY`, `EVC`, `SAC_SHC`, `BUREAU_DECISION`, `APPROVED`, `REJECTED`, `DEFICIENT`), assigned officers, risk scores, and due dates (overdue, near-deadline, healthy).
+4. **`applications`**: 150 applications spanning lifecycle stages (`SUBMITTED`, `SCRUTINY`, `EVC`, `SAC_SHC`, `BUREAU_DECISION`, `APPROVED`, `REJECTED`, `DEFICIENT`), assigned officers, risk scores, compliance scores, deficiency counts, and due dates.
 5. **`workflow_templates`**: Configurable route definitions ("Only Scrutiny", "Scrutiny + EVC", "EVC + SAC/SHC", "Only EVC", "Scrutiny + EVC + SAC/SHC") stored as JSON stages and transitions.
 6. **`stage_history`**: Granular immutable state transitions for each application with timestamps, acting officers, and remarks.
 7. **`evc_schedules`**: 25 Expert Visit Committee inspection schedules (upcoming, due soon, overdue, completed) with committee member IDs and new-institution flags.
@@ -165,15 +165,26 @@ IntelliApprove implements a 15-table architecture managed via **SQLAlchemy + Ale
 11. **`alert_rules`**: Automated alert policies (T-7, T-3, T-1, overdue; lease warnings at 90/60/30/7 days; multi-tier escalation ladders).
 12. **`notifications`**: Targeted user alerts with severities (`INFO`, `WARNING`, `CRITICAL`, `ESCALATION`).
 13. **`escalations`**: Automated multi-tier escalation records (Level 1: Regional Officer -> Level 2: Regional Head -> Level 3: Bureau Officer).
-14. **`audit_logs`**: Append-only cryptographic audit trail linking every event in a SHA-256 hash chain (`prev_hash` -> `hash`).
+14. **`audit_logs`**: Append-only cryptographic audit trail linking every event in a SHA-256 hash chain (`prev_hash` -> `hash`) anchored to genesis digest `7c1c21e...`.
 15. **`system_clock`**: Simulated date controller for time-travel demonstrations during evaluations.
+16. **`compliance_norm_rules`**: Configurable AICTE Approval Process Handbook (APH) norms (FSR, Land, Built-up area, Digital computers, Anti-Ragging, POSH ICC, Student Grievance, Barrier-Free Divyangjan, Cadre Ratios).
+17. **`academic_programs`**: Departmental program enrolment records (UG, PG, Diploma) with faculty counts, intake, student populations, and division numbers.
+18. **`deficiency_records`**: Granular flagged deficiencies against statutory norms, rectification proofs, officer verifications, and compliance scores.
 
-### Database Operations
-- **Run Alembic Migrations**:
-  ```bash
-  alembic upgrade head
-  ```
-- **Run Seed Script & Print Verification Counts**:
-  ```bash
-  python backend/app/seed.py
-  ```
+### Full Automated Verification Suite (83 of 83 Tests Passing)
+Run the entire comprehensive test suite across all 10 modules:
+```bash
+pytest -o pythonpath=backend backend/tests -v
+```
+
+Test coverage includes:
+- `test_alerts_and_clock.py`: System clock simulation, manual advance, SLA evaluations, escalation generation, rules CRUD.
+- `test_aph_compliance_and_audit_chain.py`: APH norm evaluations, deficiency rectification & officer verification, national reports, SHA-256 cryptographic chain integrity verification & tamper detection, CSV export.
+- `test_backend.py`: Health checks, Non-Negotiable Rule #1 (Login audit log), Rule #2 (Human oversight gate), Rule #3 (Configurable workflows & SLAs), Rule #5 (RBAC).
+- `test_dashboard.py`: National KPIs, 8-region performance distribution, stage funnel, ageing buckets, officer workload, bottlenecks, upcoming deadlines.
+- `test_documents.py`: Validity status computations (VALID, EXPIRING_SOON, CRITICAL, EXPIRED), renewals upload & verification, document timelines.
+- `test_evc.py`: EVC auto-creation, new-institution queue prioritization, scheduling/rescheduling with audit logs, inspection completion & auto-advancement.
+- `test_rbac_scoping.py`: Strict data scoping across all 6 roles (ADMIN, BUREAU_OFFICER, REGIONAL_HEAD, REGIONAL_OFFICER, EVC_MEMBER, INSTITUTION).
+- `test_time_travel_30d_engine.py`: Fast-forwarding time +30 days, multi-entity escalations, idempotency, auto-resolution on compliance fulfillment, external channel dispatching.
+- `test_undertakings.py`: Conditional approvals, SHA-256 evidence hashing, officer verification/rejection with mandatory speaking orders, compliance score heat tables.
+- `test_workflow_engine.py`: State-machine validation across all 5 workflow routes, human oversight barriers, return-to-stage deficiency handling, and Electronic Case Summary (ECS) generation.

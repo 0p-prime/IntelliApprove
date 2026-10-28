@@ -32,9 +32,18 @@ class Settings(BaseSettings):
         "*"
     ]
     
-    # Scheduler
+    # Scheduler & Alerts
     ENABLE_SCHEDULER: bool = True
     SLA_CHECK_INTERVAL_SECONDS: int = 30  # run SLA check every 30s in demo
+    ALERT_EVAL_INTERVAL_SECONDS: int = 60 # APScheduler alert evaluation interval (every 1 minute)
+    
+    # Notification Channels (SMTP / Mailtrap / Mock SMS)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "alerts@aicte.gov.in")
+    ENABLE_EXTERNAL_CHANNELS: bool = True
     
     class Config:
         case_sensitive = True
