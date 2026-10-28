@@ -553,3 +553,8 @@ class SystemClock(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     simulated_date = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class AcademicProgram:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)

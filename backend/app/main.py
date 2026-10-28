@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.applications import router as applications_router
 from app.services.scheduler_service import start_scheduler, shutdown_scheduler
 from app.seed import seed_database
 
@@ -43,9 +44,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API v1 Router and direct /auth Router
+# Include API v1 Router and direct /auth, /applications Routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(auth_router, prefix="/auth", tags=["Auth Direct"])
+app.include_router(applications_router, prefix="/applications", tags=["Applications Direct"])
 
 @app.get("/")
 def root():

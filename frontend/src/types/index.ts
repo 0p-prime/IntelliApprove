@@ -171,15 +171,19 @@ export interface ApplicationStageHistory {
 
 export interface Application {
   id: number;
+  ref_no?: string;
   application_number: string;
   institution_id: number;
   academic_year: string;
   application_type: string;
-  current_stage_id: number;
+  current_stage_id?: number;
+  workflow_template_id?: number;
   status: string;
   submission_date?: string;
   stage_entered_at: string;
   sla_deadline?: string;
+  due_date?: string;
+  risk_score?: number;
   is_escalated: boolean;
   escalation_level: number;
   deficiency_count: number;
@@ -190,7 +194,7 @@ export interface Application {
   approval_letter_number?: string;
   created_at: string;
   institution?: Institution;
-  current_stage?: StageConfig;
+  current_stage?: any;
   programs?: AcademicProgram[];
   documents?: ApplicationDocument[];
   deficiencies?: DeficiencyRecord[];
@@ -201,6 +205,78 @@ export interface Application {
   evc_remarks?: string;
   decision_notes?: string;
   digital_signature_hash?: string;
+}
+
+export interface TimelineHistoryItem {
+  id: number;
+  stage: string;
+  action: string;
+  remarks?: string;
+  entered_at?: string;
+  completed_at?: string;
+  officer_id?: number;
+  officer_name?: string;
+  officer_role?: string;
+}
+
+export interface TimelineData {
+  application_id: number;
+  ref_no: string;
+  template_name: string;
+  stages: string[];
+  current_stage: string;
+  status: string;
+  history: TimelineHistoryItem[];
+}
+
+export interface CaseSummaryData {
+  application_id: number;
+  ref_no: string;
+  watermark: string;
+  generated_at: string;
+  institution: {
+    id: number;
+    name: string;
+    aicte_id: string;
+    type: string;
+    state: string;
+    region: string;
+    contact_email: string;
+    is_new: boolean;
+  };
+  workflow_route: {
+    template_id: number;
+    template_name: string;
+    stages: string[];
+    current_stage: string;
+    status: string;
+  };
+  stage_timeline: Array<{
+    stage: string;
+    entered_at?: string;
+    completed_at?: string;
+    action: string;
+    remarks?: string;
+    officer: string;
+  }>;
+  observations: Array<{
+    stage: string;
+    action: string;
+    officer: string;
+    notes: string;
+  }>;
+  pending_items: {
+    undertakings_total: number;
+    undertakings_pending: number;
+    documents_total: number;
+    documents_pending: number;
+  };
+  risk_assessment: {
+    risk_score: number;
+    due_date?: string;
+    is_escalated: boolean;
+  };
+  markdown_summary: string;
 }
 
 export interface Alert {

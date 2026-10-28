@@ -322,7 +322,45 @@ class ApplicationCreate(BaseModel):
     institution_id: int
     academic_year: str = "2026-2027"
     application_type: str = "Extension of Approval (EoA)"
+    template_id: Optional[int] = None
     programs: List[AcademicProgramSchema] = []
+
+class ApplicationUpdate(BaseModel):
+    application_type: Optional[str] = None
+    risk_score: Optional[float] = None
+    due_date: Optional[datetime] = None
+    assigned_officer_id: Optional[int] = None
+
+class CompleteStageRequest(BaseModel):
+    remarks: Optional[str] = None
+    verdict: Optional[str] = None  # APPROVED, REJECTED (for Bureau Decision)
+    checklist_acknowledgement: Optional[Dict[str, bool]] = None
+
+class ReturnApplicationRequest(BaseModel):
+    reason: str
+    target_stage: Optional[str] = None
+
+class TimelineOut(BaseModel):
+    application_id: int
+    ref_no: str
+    template_name: str
+    stages: List[str]
+    current_stage: str
+    status: str
+    history: List[Dict[str, Any]]
+
+class CaseSummaryOut(BaseModel):
+    application_id: int
+    ref_no: str
+    watermark: str = "Draft for official review"
+    generated_at: datetime
+    institution: Dict[str, Any]
+    workflow_route: Dict[str, Any]
+    stage_timeline: List[Dict[str, Any]]
+    observations: List[Dict[str, Any]]
+    pending_items: Dict[str, Any]
+    risk_assessment: Dict[str, Any]
+    markdown_summary: str
 
 class StageTransitionRequest(BaseModel):
     target_stage_id: int

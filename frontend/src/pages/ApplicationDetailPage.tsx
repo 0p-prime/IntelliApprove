@@ -19,25 +19,55 @@ import {
   CheckSquare,
   Lock,
   ChevronRight,
-  History
+  History,
+  RotateCcw,
+  X,
+  Scale
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
-import { Application, WorkflowRoute, ComplianceNormRule } from '../types';
+import {
+  Application,
+  WorkflowRoute,
+  ComplianceNormRule,
+  TimelineData,
+  CaseSummaryData
+} from '../types';
 import { HumanOversightBadge } from '../components/HumanOversightBadge';
 import { StatusPill } from '../components/StatusPill';
 import { LoadingState, ErrorState } from '../components/States';
+import { VisualStageStepper } from '../components/VisualStageStepper';
+import { CaseSummaryModal } from '../components/CaseSummaryModal';
 import { useAuth } from '../context/AuthContext';
 
 export const ApplicationDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [application, setApplication] = useState<Application | null>(null);
+  const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [allowedActions, setAllowedActions] = useState<WorkflowRoute[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'compliance' | 'documents' | 'evc' | 'decision' | 'undertakings' | 'audit'
   >('overview');
+
+  // Case Summary Modal states
+  const [caseSummary, setCaseSummary] = useState<CaseSummaryData | null>(null);
+  const [isCaseSummaryOpen, setIsCaseSummaryOpen] = useState<boolean>(false);
+  const [fetchingSummary, setFetchingSummary] = useState<boolean>(false);
+
+  // Return Application Modal states
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState<boolean>(false);
+  const [returnReason, setReturnReason] = useState<string>('');
+  const [returnTargetStage, setReturnTargetStage] = useState<string>('SUBMITTED');
+  const [returningApp, setReturningApp] = useState<boolean>(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+
+  // Complete Stage Modal states
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState<boolean>(false);
+  const [stageRemarks, setStageRemarks] = useState<string>('');
+  const [completingStage, setCompletingStage] = useState<boolean>(false);
+  const [stageError, setStageError] = useState<string | null>(null);
 
   // Action / Modal states
   const [transitioning, setTransitioning] = useState<boolean>(false);
@@ -78,11 +108,13 @@ export const ApplicationDetailPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const appData = await apiRequest<Application>(`/applications/${id}`);
+      const [appData, timelineData, actionsData] = await Promise.all([
+        apiRequest<Application>(`/applications/${id}`),
+        apiRequest<TimelineData>(`/applications/${id}/timeline`).catch(() => null),
+        apiRequest<WorkflowRoute[]>(`/workflow/allowed-actions/${id}`).catch(() => []),
+      ]);
       setApplication(appData);
-
-      // Load allowed workflow actions for this application and current user role
-      const actionsData = await apiRequest<WorkflowRoute[]>(`/workflow/allowed-actions/${id}`);
+      setTimeline(timelineData);
       setAllowedActions(actionsData);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch application');
@@ -95,7 +127,7 @@ export const ApplicationDetailPage: React.FC = () => {
     fetchApplicationDetails();
   }, [id, user?.role]);
 
-  // Handle stage transition
+  // Handle stage transition via legacy route if needed
   const handleTransition = async (route: WorkflowRoute) => {
     if (!application) return;
     const remarks = prompt(`Enter remarks for action: "${route.action_name}"`) || '';
@@ -115,6 +147,75 @@ export const ApplicationDetailPage: React.FC = () => {
       alert(`Transition failed: ${err.message}`);
     } finally {
       setTransitioning(false);
+    }
+  };
+
+  // Generate Electronic Case Summary (Section A)
+  const handleGenerateCaseSummary = async () => {
+    if (!application) return;
+    setFetchingSummary(true);
+    try {
+      const summaryData = await apiRequest<CaseSummaryData>(`/applications/${application.id}/case-summary`);
+      setCaseSummary(summaryData);
+      setIsCaseSummaryOpen(true);
+    } catch (err: any) {
+      alert(`Failed to generate case summary: ${err.message || 'Network error'}`);
+    } finally {
+      setFetchingSummary(false);
+    }
+  };
+
+  // Complete Stage & Advance (Section A)
+  const handleCompleteStageSubmit = async () => {
+    if (!application) return;
+    setCompletingStage(true);
+    setStageError(null);
+    try {
+      const updated = await apiRequest<Application>(`/applications/${application.id}/complete-stage`, {
+        method: 'POST',
+        body: JSON.stringify({
+          remarks: stageRemarks.trim() || undefined,
+        }),
+      });
+      setApplication(updated);
+      setIsCompleteModalOpen(false);
+      setStageRemarks('');
+      await fetchApplicationDetails();
+      alert('Stage marked complete. Application automatically advanced to next route stage!');
+    } catch (err: any) {
+      setStageError(err.message || 'Failed to complete stage');
+    } finally {
+      setCompletingStage(false);
+    }
+  };
+
+  // Return Application with Mandatory Reason (Section A)
+  const handleReturnSubmit = async () => {
+    if (!application) return;
+    if (!returnReason.trim()) {
+      setReturnError('A mandatory reason must be provided when returning an application.');
+      return;
+    }
+    setReturningApp(true);
+    setReturnError(null);
+    try {
+      const updated = await apiRequest<Application>(`/applications/${application.id}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          reason: returnReason.trim(),
+          target_stage: returnTargetStage || undefined,
+        }),
+      });
+      setApplication(updated);
+      setIsReturnModalOpen(false);
+      setReturnReason('');
+      setReturnTargetStage('SUBMITTED');
+      await fetchApplicationDetails();
+      alert(`Application returned with status 'RETURNED'. Audit record written.`);
+    } catch (err: any) {
+      setReturnError(err.message || 'Failed to return application');
+    } finally {
+      setReturningApp(false);
     }
   };
 
@@ -226,14 +327,26 @@ export const ApplicationDetailPage: React.FC = () => {
 
     setSubmittingDecision(true);
     try {
-      const updated = await apiRequest<Application>(`/workflow/authority-decision/${application.id}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          verdict,
-          notes: decisionNotes,
-          checklist_acknowledgement: checklist,
-        }),
-      });
+      let updated: Application;
+      try {
+        updated = await apiRequest<Application>(`/applications/${application.id}/complete-stage`, {
+          method: 'POST',
+          body: JSON.stringify({
+            verdict: verdict === 'APPROVED_WITH_CONDITIONS' ? 'APPROVED' : verdict,
+            remarks: decisionNotes,
+            checklist_acknowledgement: checklist,
+          }),
+        });
+      } catch (_) {
+        updated = await apiRequest<Application>(`/workflow/authority-decision/${application.id}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            verdict,
+            notes: decisionNotes,
+            checklist_acknowledgement: checklist,
+          }),
+        });
+      }
       setApplication(updated);
       alert(`Competent Authority Decision (${verdict}) formally recorded and digitally signed!`);
       await fetchApplicationDetails();
@@ -247,7 +360,45 @@ export const ApplicationDetailPage: React.FC = () => {
   if (loading) return <LoadingState message="Loading application details..." />;
   if (error || !application) return <ErrorState message={error || 'Application not found'} onRetry={fetchApplicationDetails} />;
 
-  const isAuthorityUser = user?.role === 'COMPETENT_AUTHORITY' || user?.role === 'ADMIN';
+  const isAuthorityUser = user?.role === 'COMPETENT_AUTHORITY' || user?.role === 'BUREAU_OFFICER' || user?.role === 'ADMIN';
+
+  // Current stage computation
+  const currentStageName = (application.current_stage?.name || application.current_stage || application.status || '').toUpperCase();
+  const isTerminal = application.status === 'APPROVED' || application.status === 'REJECTED' || currentStageName === 'APPROVED' || currentStageName === 'REJECTED';
+
+  // Role permissions checking for Stage Complete
+  const canCompleteStage = (() => {
+    if (!user || isTerminal) return false;
+    if (user.role === 'ADMIN') return true;
+    if (currentStageName === 'SUBMITTED') {
+      return user.role === 'INSTITUTION' || user.role === 'REGIONAL_OFFICER';
+    }
+    if (currentStageName === 'SCRUTINY') {
+      return user.role === 'REGIONAL_OFFICER' || user.role === 'SCRUTINY_OFFICER';
+    }
+    if (currentStageName === 'EVC') {
+      return user.role === 'EVC_MEMBER' || user.role === 'EVC_INSPECTOR';
+    }
+    if (currentStageName === 'SAC_SHC') {
+      return user.role === 'REGIONAL_HEAD';
+    }
+    if (currentStageName === 'BUREAU_DECISION') {
+      return user.role === 'BUREAU_OFFICER' || user.role === 'COMPETENT_AUTHORITY';
+    }
+    return false;
+  })();
+
+  // Role permissions checking for Return Application
+  const canReturnApplication = (() => {
+    if (!user || isTerminal) return false;
+    if (user.role === 'ADMIN') return true;
+    return ['REGIONAL_OFFICER', 'REGIONAL_HEAD', 'BUREAU_OFFICER', 'SCRUTINY_OFFICER'].includes(user.role);
+  })();
+
+  // Calculate next stage for preview
+  const routeStages = timeline?.stages || [];
+  const currentIdx = routeStages.indexOf(currentStageName);
+  const nextStageName = currentIdx >= 0 && currentIdx < routeStages.length - 1 ? routeStages[currentIdx + 1] : null;
 
   return (
     <div className="space-y-6">
@@ -255,7 +406,7 @@ export const ApplicationDetailPage: React.FC = () => {
       <div className="flex items-center gap-2 text-xs text-slate-500">
         <Link to="/applications" className="hover:text-slate-800">Applications</Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <span className="font-mono text-slate-800 font-semibold">{application.application_number}</span>
+        <span className="font-mono text-slate-800 font-semibold">{application.ref_no || application.application_number}</span>
       </div>
 
       {/* Top Banner & Action Gate */}
@@ -264,15 +415,15 @@ export const ApplicationDetailPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-bold text-slate-900 font-mono tracking-tight">
-                {application.application_number}
+                {application.ref_no || application.application_number}
               </h1>
               <StatusPill status={application.status} isEscalated={application.is_escalated} />
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
-                AY {application.academic_year}
+                AY {application.academic_year || '2026-2027'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-600">
+            <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-600 flex-wrap">
               <Building2 className="w-4 h-4 text-slate-400" />
               <span className="font-semibold text-slate-900">{application.institution?.name}</span>
               <span>•</span>
@@ -283,47 +434,98 @@ export const ApplicationDetailPage: React.FC = () => {
           </div>
 
           {/* Persistent Non-Negotiable Rule #2 Badge */}
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-2">
             <HumanOversightBadge size="sm" />
           </div>
         </div>
 
-        {/* Dynamic Workflow Transition Actions (Rule #3: Read from DB) */}
+        {/* Section A: Role-Gated Approval Workflow Engine Actions */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-600">
+          <div className="flex items-center gap-2 text-xs text-slate-600 flex-wrap">
             <span className="font-semibold text-slate-800">Current Assigned Stage:</span>
-            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-medium border border-blue-200">
-              {application.current_stage?.name || application.status}
+            <span className="px-2.5 py-0.5 rounded bg-blue-50 text-blue-800 font-bold border border-blue-200 font-mono">
+              {currentStageName}
             </span>
             {application.sla_deadline && (
-              <span className="flex items-center gap-1 text-[11px] text-slate-500 ml-2">
+              <span className="flex items-center gap-1 text-[11px] text-slate-500 ml-1">
                 <Clock className="w-3.5 h-3.5" />
-                SLA: {new Date(application.sla_deadline).toLocaleDateString()} ({application.current_stage?.sla_hours || 72}h window)
+                SLA: {new Date(application.sla_deadline).toLocaleDateString()}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {allowedActions.length === 0 ? (
-              <span className="text-xs text-slate-400 italic">
-                No next actions for your current role ({user?.role}).
-              </span>
-            ) : (
-              allowedActions.map((route) => (
+            {/* 1. Generate Electronic Case Summary */}
+            <button
+              onClick={handleGenerateCaseSummary}
+              disabled={fetchingSummary}
+              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md text-xs font-semibold border border-slate-300 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Auto-generates template-based Electronic Case Summary marked 'Draft for official review'"
+            >
+              <FileText className={`w-3.5 h-3.5 text-blue-900 ${fetchingSummary ? 'animate-spin' : ''}`} />
+              {fetchingSummary ? 'Compiling Summary...' : 'Electronic Case Summary'}
+            </button>
+
+            {/* 2. Return Application (Revert back with mandatory reason) */}
+            {canReturnApplication && (
+              <button
+                onClick={() => {
+                  setReturnError(null);
+                  setReturnReason('');
+                  setReturnTargetStage('SUBMITTED');
+                  setIsReturnModalOpen(true);
+                }}
+                className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded-md text-xs font-semibold border border-rose-300 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Mandatory-reason revert back to previous stage or institution"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                Return Application
+              </button>
+            )}
+
+            {/* 3. Stage Action: Complete Stage or Authority Decision */}
+            {canCompleteStage && !isTerminal && (
+              currentStageName === 'BUREAU_DECISION' ? (
                 <button
-                  key={route.id}
-                  onClick={() => handleTransition(route)}
-                  disabled={transitioning}
-                  className="px-3.5 py-1.5 bg-[#0B2240] hover:bg-[#07172C] disabled:opacity-50 text-white rounded-md text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  onClick={() => setActiveTab('decision')}
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Send className="w-3.5 h-3.5 text-amber-400" />
-                  {route.action_name}
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Record Authority Decision</span>
+                  <span className="px-1.5 py-0.2 bg-amber-800/40 rounded text-[10px] font-mono">Rule #2</span>
                 </button>
-              ))
+              ) : (
+                <button
+                  onClick={() => {
+                    setStageError(null);
+                    setStageRemarks('');
+                    setIsCompleteModalOpen(true);
+                  }}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Complete Stage & Advance
+                </button>
+              )
+            )}
+
+            {/* Viewing Notice if read-only */}
+            {!canCompleteStage && !canReturnApplication && !isTerminal && (
+              <span className="text-[11px] text-slate-400 italic">
+                Viewing as {user?.role} (Read-only at this stage)
+              </span>
             )}
           </div>
         </div>
       </div>
+
+      {/* Visual Stage Stepper Timeline (Section A) */}
+      <VisualStageStepper
+        timeline={timeline}
+        currentStage={currentStageName}
+        status={application.status}
+        onRefresh={fetchApplicationDetails}
+      />
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-slate-200 overflow-x-auto gap-2 bg-white px-4 rounded-t-xl">
@@ -620,7 +822,7 @@ export const ApplicationDetailPage: React.FC = () => {
                         </td>
                         <td className="py-2.5 px-3 text-slate-600">{doc.verification_remarks || 'Pending verification'}</td>
                         <td className="py-2.5 px-3 text-right">
-                          {(user?.role === 'SCRUTINY_OFFICER' || user?.role === 'ADMIN') && (
+                          {(user?.role === 'SCRUTINY_OFFICER' || user?.role === 'REGIONAL_OFFICER' || user?.role === 'ADMIN') && (
                             <div className="flex justify-end gap-1.5">
                               <button
                                 onClick={() => handleVerifyDocument(doc.id, 'VERIFIED_COMPLIANT')}
@@ -645,7 +847,7 @@ export const ApplicationDetailPage: React.FC = () => {
             </div>
 
             {/* Scrutiny Committee Assessment Submission */}
-            {(user?.role === 'SCRUTINY_OFFICER' || user?.role === 'ADMIN') && (
+            {(user?.role === 'SCRUTINY_OFFICER' || user?.role === 'REGIONAL_OFFICER' || user?.role === 'ADMIN') && (
               <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
                 <h4 className="font-bold text-xs text-blue-900 uppercase tracking-wider">
                   Scrutiny Committee Findings & Recommendation
@@ -703,7 +905,7 @@ export const ApplicationDetailPage: React.FC = () => {
             </div>
 
             {/* EVC Inspector Action Panel */}
-            {(user?.role === 'EVC_INSPECTOR' || user?.role === 'ADMIN') && (
+            {(user?.role === 'EVC_INSPECTOR' || user?.role === 'EVC_MEMBER' || user?.role === 'ADMIN') && (
               <div className="p-5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-4">
                 <h4 className="font-bold text-xs text-indigo-900 uppercase tracking-wider">
                   Submit EVC Physical Verification & Lab Evaluation
@@ -845,12 +1047,18 @@ export const ApplicationDetailPage: React.FC = () => {
             ) : (
               /* Decision Entry Form for Competent Authority */
               <div className="p-6 bg-white border border-slate-200 rounded-xl space-y-5">
-                <h3 className="font-bold text-sm text-slate-900">Competent Authority Evaluation Workspace</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-slate-900">Competent Authority Evaluation Workspace</h3>
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-bold">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                    Human Oversight Required
+                  </div>
+                </div>
 
                 {!isAuthorityUser && (
                   <div className="p-3 bg-slate-100 text-slate-700 rounded-lg text-xs flex items-center gap-2">
                     <Lock className="w-4 h-4 text-slate-500" />
-                    You are currently viewing as <strong>{user?.role}</strong>. To test issuing this decision, switch role to <strong>Competent Authority</strong> using the Demo Switcher in the top right header!
+                    You are currently viewing as <strong>{user?.role}</strong>. To test issuing this decision, switch role to <strong>Bureau Officer</strong> or <strong>Admin</strong> using the quick switcher in the top bar!
                   </div>
                 )}
 
@@ -956,7 +1164,7 @@ export const ApplicationDetailPage: React.FC = () => {
                   <textarea
                     value={decisionNotes}
                     onChange={(e) => setDecisionNotes(e.target.value)}
-                    placeholder="Enter the official speaking order rationale signed off by Member Secretary / Competent Authority..."
+                    placeholder="Enter the official speaking order rationale signed off by Bureau Officer / Member Secretary..."
                     className="w-full p-2.5 bg-white border border-slate-300 rounded-md text-xs focus:ring-2 focus:ring-[#0B2240]"
                     rows={4}
                   />
@@ -1052,12 +1260,30 @@ export const ApplicationDetailPage: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {application.stage_history?.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-lg">
-                  No stage transitions recorded yet.
-                </div>
-              ) : (
-                application.stage_history?.map((h) => (
+              {(timeline?.history && timeline.history.length > 0) ? (
+                timeline.history.map((h, idx) => (
+                  <div key={h.id || idx} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 text-xs flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{h.stage}</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                          {h.action}
+                        </span>
+                        {h.officer_name && (
+                          <span className="text-slate-500 text-[11px]">
+                            by <strong>{h.officer_name}</strong> ({h.officer_role || 'Officer'})
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-700">{h.remarks || 'No remarks provided'}</p>
+                    </div>
+                    <span className="text-[11px] text-slate-400 whitespace-nowrap font-mono">
+                      {h.completed_at ? new Date(h.completed_at).toLocaleString() : h.entered_at ? new Date(h.entered_at).toLocaleString() : '—'}
+                    </span>
+                  </div>
+                ))
+              ) : application.stage_history && application.stage_history.length > 0 ? (
+                application.stage_history.map((h) => (
                   <div key={h.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs flex items-start justify-between">
                     <div>
                       <div className="font-bold text-slate-900">{h.action_taken}</div>
@@ -1068,11 +1294,189 @@ export const ApplicationDetailPage: React.FC = () => {
                     </span>
                   </div>
                 ))
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-lg">
+                  No stage transitions recorded yet.
+                </div>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Return Application Modal */}
+      {isReturnModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-in fade-in duration-100">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-700">
+                <RotateCcw className="w-5 h-5 text-rose-600" />
+                <h3 className="font-bold text-base text-slate-900">Return Application</h3>
+              </div>
+              <button
+                onClick={() => setIsReturnModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Revert this application back to a previous stage or to the institution for deficiency rectification, verification, or clarification. Status will be marked as <strong className="text-rose-700 font-mono">RETURNED</strong>.
+            </p>
+
+            {/* Target Stage Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Return Destination Stage:
+              </label>
+              <select
+                value={returnTargetStage}
+                onChange={(e) => setReturnTargetStage(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-rose-500 focus:bg-white"
+              >
+                <option value="SUBMITTED">Institution (Reopen for Applicant Rectification)</option>
+                {timeline?.stages
+                  .filter((s) => s !== 'APPROVED' && s !== 'REJECTED' && s !== currentStageName && s !== 'SUBMITTED')
+                  .map((s) => (
+                    <option key={s} value={s}>
+                      Previous Stage Desk: {s}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Mandatory Reason */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Mandatory Deficiency / Clarification Reason <span className="text-rose-600">*</span>:
+              </label>
+              <textarea
+                value={returnReason}
+                onChange={(e) => {
+                  setReturnReason(e.target.value);
+                  if (returnError) setReturnError(null);
+                }}
+                placeholder="State the specific legal, documentary, or infrastructural deficiency requiring this revert..."
+                rows={4}
+                className="w-full p-3 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500"
+              />
+              <div className="flex justify-between items-center text-[11px] text-slate-400 mt-1">
+                <span>A clear reason is legally mandatory and permanently recorded in audit logs.</span>
+                <span>{returnReason.length} chars</span>
+              </div>
+            </div>
+
+            {returnError && (
+              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{returnError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setIsReturnModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReturnSubmit}
+                disabled={returningApp}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${returningApp ? 'animate-spin' : ''}`} />
+                {returningApp ? 'Processing Return...' : 'Confirm Return Order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Stage Modal (For Intermediate Stages) */}
+      {isCompleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-in fade-in duration-100">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-[#0B2240]">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900">Complete Stage & Advance</h3>
+              </div>
+              <button
+                onClick={() => setIsCompleteModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 font-medium">Current Stage:</span>
+                <span className="font-bold font-mono text-[#0B2240] px-2 py-0.5 rounded bg-white border border-blue-200">
+                  {currentStageName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 font-medium">Automatic Destination:</span>
+                <span className="font-bold font-mono text-emerald-800 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">
+                  {nextStageName || 'BUREAU_DECISION'}
+                </span>
+              </div>
+              {nextStageName === 'EVC' && (
+                <div className="text-[11px] text-indigo-800 pt-1 border-t border-blue-100">
+                  ℹ️ Advancing will automatically create an <strong>EVC Inspection Schedule</strong> in the committee queue.
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Stage Completion Remarks / Desk Findings:
+              </label>
+              <textarea
+                value={stageRemarks}
+                onChange={(e) => setStageRemarks(e.target.value)}
+                placeholder="Enter committee observations, checklist clearances, or approval handover notes..."
+                rows={3}
+                className="w-full p-3 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-[#0B2240]"
+              />
+            </div>
+
+            {stageError && (
+              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{stageError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setIsCompleteModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCompleteStageSubmit}
+                disabled={completingStage}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
+              >
+                <CheckCircle2 className={`w-3.5 h-3.5 ${completingStage ? 'animate-spin' : ''}`} />
+                {completingStage ? 'Advancing Stage...' : 'Complete & Advance'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Electronic Case Summary Modal (Section A) */}
+      <CaseSummaryModal
+        summary={caseSummary}
+        isOpen={isCaseSummaryOpen}
+        onClose={() => setIsCaseSummaryOpen(false)}
+      />
     </div>
   );
 };
