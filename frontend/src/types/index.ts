@@ -436,3 +436,47 @@ export interface UpcomingDeadlineItem {
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
   link: string;
 }
+
+export interface EVCScheduleItem {
+  id: number;
+  application_id: number;
+  application_ref_no?: string;
+  application_status?: string;
+  current_stage?: string;
+  institution_id?: number;
+  institution_name: string;
+  institution_type: string;
+  state: string;
+  region_id?: number;
+  region_name: string;
+  scheduled_date?: string;
+  due_date: string;
+  completed_at?: string;
+  status: 'QUEUED' | 'SCHEDULED' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED';
+  raw_status: string;
+  committee_ids: number[];
+  committee_members: Array<{
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    region_name: string;
+  }>;
+  is_new_institution: boolean;
+  days_remaining: number;
+  days_overdue: number;
+  is_overdue: boolean;
+  is_due_soon: boolean;
+  inspection_notes?: string;
+  recommendation?: string;
+}
+
+export interface EVCCommitteeMember {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  region_id?: number;
+  region_name: string;
+  active_assignments: number;
+}

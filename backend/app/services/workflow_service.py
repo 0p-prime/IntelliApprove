@@ -283,16 +283,19 @@ class WorkflowService:
         # Status mapping & automated queueing
         if next_stage == "EVC":
             application.status = "UNDER_EVC"
-            # Queue in EVC schedules if not already scheduled
+            # Queue in EVC schedules if not already queued or scheduled
             existing_evc = db.query(EVCSchedule).filter(EVCSchedule.application_id == application.id).first()
             if not existing_evc:
+                is_new = application.institution.is_new if application.institution else False
+                # Shorter due window for new institutions (10 days vs 21 days for existing)
+                due_days = 10 if is_new else 21
                 evc_schedule = EVCSchedule(
                     application_id=application.id,
-                    scheduled_date=now + timedelta(days=14),
-                    due_date=now + timedelta(days=21),
-                    status="SCHEDULED",
+                    scheduled_date=now + timedelta(days=max(1, due_days - 3)),
+                    due_date=now + timedelta(days=due_days),
+                    status="QUEUED",
                     committee_ids="[]",
-                    is_new_institution=application.institution.is_new if application.institution else False
+                    is_new_institution=is_new
                 )
                 db.add(evc_schedule)
         elif next_stage == "SCRUTINY":
