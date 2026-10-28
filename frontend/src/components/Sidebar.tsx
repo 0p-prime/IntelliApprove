@@ -10,16 +10,19 @@ import {
   BarChart3,
   History,
   Settings,
-  Activity,
-  CheckCircle2,
+  PlusCircle,
+  GitBranch,
+  ShieldCheck,
   AlertCircle
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../api/client';
 
 export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
   isOpen,
   onClose,
 }) => {
+  const { user } = useAuth();
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -28,17 +31,85 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
       .catch(() => setBackendHealthy(false));
   }, []);
 
-  const menuItems = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/applications', label: 'Applications', icon: FileText },
-    { to: '/evc', label: 'EVC Inspection', icon: Users },
-    { to: '/undertakings', label: 'Undertakings', icon: FileCheck2 },
-    { to: '/documents', label: 'Documents', icon: FolderClosed },
-    { to: '/alerts', label: 'Alerts & Escalations', icon: Bell },
-    { to: '/reports', label: 'Reports & Analytics', icon: BarChart3 },
-    { to: '/audit', label: 'Audit Trail', icon: History },
-    { to: '/admin', label: 'Admin Settings', icon: Settings },
+  const role = user?.role || 'INSTITUTION';
+
+  // Define role-specific navigation menus
+  const allNavItems = [
+    {
+      to: '/',
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
+    },
+    {
+      to: '/applications',
+      label: role === 'INSTITUTION' ? 'My Applications' : 'Applications',
+      icon: FileText,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
+    },
+    {
+      to: '/applications/new',
+      label: 'New Application',
+      icon: PlusCircle,
+      roles: ['ADMIN', 'INSTITUTION']
+    },
+    {
+      to: '/evc',
+      label: role === 'EVC_MEMBER' ? 'Assigned Inspections' : 'EVC Inspections',
+      icon: Users,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER']
+    },
+    {
+      to: '/undertakings',
+      label: 'Undertakings',
+      icon: FileCheck2,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
+    },
+    {
+      to: '/documents',
+      label: 'Document Store',
+      icon: FolderClosed,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
+    },
+    {
+      to: '/alerts',
+      label: 'Alerts & Escalations',
+      icon: Bell,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'INSTITUTION']
+    },
+    {
+      to: '/reports',
+      label: 'Reports & Analytics',
+      icon: BarChart3,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER']
+    },
+    {
+      to: '/audit',
+      label: 'System Audit Trail',
+      icon: History,
+      roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD']
+    },
+    {
+      to: '/config/workflow',
+      label: 'Workflow Routes',
+      icon: GitBranch,
+      roles: ['ADMIN', 'BUREAU_OFFICER']
+    },
+    {
+      to: '/admin',
+      label: 'Admin Settings',
+      icon: Settings,
+      roles: ['ADMIN']
+    },
   ];
+
+  // Filter based on active user role (support aliases)
+  const normalizedRole = 
+    role === 'COMPETENT_AUTHORITY' ? 'BUREAU_OFFICER' :
+    role === 'SCRUTINY_OFFICER' ? 'REGIONAL_OFFICER' :
+    role === 'EVC_INSPECTOR' ? 'EVC_MEMBER' : role;
+
+  const visibleItems = allNavItems.filter((item) => item.roles.includes(normalizedRole));
 
   return (
     <>
@@ -57,10 +128,14 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
       >
         {/* Navigation Links */}
         <div className="p-3 space-y-1 overflow-y-auto">
-          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Main Navigation
+          <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+            <span>Navigation</span>
+            <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+              {normalizedRole}
+            </span>
           </div>
-          {menuItems.map((item) => {
+
+          {visibleItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -83,11 +158,26 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
           })}
         </div>
 
-        {/* Bottom Health Indicator & Monorepo Badge */}
+        {/* Bottom Health Indicator & Scope Info */}
         <div className="p-4 border-t border-slate-200 bg-slate-50/70 space-y-2">
+          {/* Active Jurisdiction Scope */}
+          <div className="p-2 rounded-lg bg-white border border-slate-200 text-[11px] text-slate-600 space-y-0.5">
+            <div className="font-semibold text-slate-800 text-[10px] uppercase tracking-wider text-slate-400">
+              Active Scope
+            </div>
+            <div className="truncate font-medium text-[#0B2240]">
+              {user?.region_name ? `${user.region_name} Region` : 'National Jurisdiction'}
+            </div>
+            {user?.institution_name && (
+              <div className="text-[10px] text-slate-500 truncate" title={user.institution_name}>
+                {user.institution_name}
+              </div>
+            )}
+          </div>
+
           {/* Live Backend Health Check */}
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500 font-medium">Backend API:</span>
+          <div className="flex items-center justify-between text-xs pt-1">
+            <span className="text-slate-500 text-[11px]">Backend API:</span>
             {backendHealthy === null ? (
               <span className="text-slate-400 text-[11px]">Checking...</span>
             ) : backendHealthy ? (
@@ -101,10 +191,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
                 Offline
               </span>
             )}
-          </div>
-
-          <div className="text-[10px] text-slate-400 text-center font-mono pt-1 border-t border-slate-200/60">
-            IntelliApprove v1.0 • PS 26262
           </div>
         </div>
       </aside>

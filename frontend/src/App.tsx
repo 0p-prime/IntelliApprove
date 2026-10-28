@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ApplicationsListPage } from './pages/ApplicationsListPage';
 import { ApplicationDetailPage } from './pages/ApplicationDetailPage';
@@ -19,9 +20,46 @@ import { EscalationLadderPage } from './pages/EscalationLadderPage';
 import { ComplianceRulesPage } from './pages/ComplianceRulesPage';
 import { LoadingState } from './components/States';
 
+const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({
+  children,
+  allowedRoles,
+}) => {
+  const { user, isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <LoadingState message="Verifying session and security clearance..." />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (allowedRoles && allowedRoles.length > 0) {
+    const userRole = user.role;
+    const hasRole =
+      userRole === 'ADMIN' ||
+      allowedRoles.includes(userRole) ||
+      (userRole === 'BUREAU_OFFICER' && allowedRoles.includes('COMPETENT_AUTHORITY')) ||
+      (userRole === 'REGIONAL_OFFICER' && allowedRoles.includes('SCRUTINY_OFFICER')) ||
+      (userRole === 'EVC_MEMBER' && allowedRoles.includes('EVC_INSPECTOR'));
+
+    if (!hasRole) {
+      return <Navigate to="/" replace />;
+    }
+  }
+
+  return <>{children}</>;
+};
+
 const AppShell: React.FC = () => {
-  const { loading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -31,31 +69,142 @@ const AppShell: React.FC = () => {
     );
   }
 
+  // If on /login page, render it directly without AppShell framing
+  if (location.pathname === '/login') {
+    if (isAuthenticated) {
+      return <Navigate to="/" replace />;
+    }
+    return <LoginPage />;
+  }
+
+  // If unauthenticated on any other route, redirect to /login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
       <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
       <div className="flex-1 flex w-full">
-        {/* App Shell Sidebar Navigation */}
+        {/* Role-based App Shell Sidebar */}
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/applications" element={<ApplicationsListPage />} />
-            <Route path="/applications/new" element={<NewApplicationPage />} />
-            <Route path="/applications/:id" element={<ApplicationDetailPage />} />
-            <Route path="/evc" element={<EVCPage />} />
-            <Route path="/undertakings" element={<UndertakingsPage />} />
-            <Route path="/documents" element={<DocumentsPage />} />
-            <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/audit" element={<AuditExplorerPage />} />
-            <Route path="/admin" element={<AdminSettingsPage />} />
-            <Route path="/config/workflow" element={<WorkflowConfigPage />} />
-            <Route path="/config/escalations" element={<EscalationLadderPage />} />
-            <Route path="/config/compliance" element={<ComplianceRulesPage />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/applications"
+              element={
+                <ProtectedRoute>
+                  <ApplicationsListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/applications/new"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'INSTITUTION']}>
+                  <NewApplicationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/applications/:id"
+              element={
+                <ProtectedRoute>
+                  <ApplicationDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/evc"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER']}>
+                  <EVCPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/undertakings"
+              element={
+                <ProtectedRoute>
+                  <UndertakingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                <ProtectedRoute>
+                  <DocumentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/alerts"
+              element={
+                <ProtectedRoute>
+                  <AlertsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER']}>
+                  <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD']}>
+                  <AuditExplorerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <AdminSettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/config/workflow"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER']}>
+                  <WorkflowConfigPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/config/escalations"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER']}>
+                  <EscalationLadderPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/config/compliance"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER']}>
+                  <ComplianceRulesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

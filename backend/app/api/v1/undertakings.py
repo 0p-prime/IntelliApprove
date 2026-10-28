@@ -19,6 +19,8 @@ from app.schemas.all_schemas import (
 )
 from app.services.audit_service import AuditService
 
+from app.core.scoping import scope_undertakings_by_role
+
 router = APIRouter()
 
 @router.get("", response_model=List[UndertakingOut])
@@ -28,8 +30,9 @@ def list_undertakings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List compliance undertakings with filters."""
-    query = db.query(Undertaking)
+    """List compliance undertakings with role-based scoping."""
+    base_query = db.query(Undertaking)
+    query = scope_undertakings_by_role(base_query, current_user, db)
     if application_id:
         query = query.filter(Undertaking.application_id == application_id)
     if status_filter:

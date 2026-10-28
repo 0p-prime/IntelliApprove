@@ -17,6 +17,8 @@ from app.models.workflow import StageConfig
 from app.schemas.all_schemas import ApplicationOut, ApplicationDetailOut, ApplicationCreate
 from app.services.audit_service import AuditService
 
+from app.core.scoping import scope_applications_by_role, scope_evc_schedules_by_role
+
 router = APIRouter()
 
 @router.get("", response_model=List[ApplicationOut])
@@ -27,30 +29,29 @@ def list_applications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List applications with role-based scoping and multi-attribute filters."""
-    query = db.query(Application)
-
-    # Scoping: Institutions only see their own applications
-    if current_user.role == UserRole.INSTITUTION.value:
-        if current_user.institution_id:
-            query = query.filter(Application.institution_id == current_user.institution_id)
-        else:
-            return []
+    """
+    List applications with role-based scoping:
+    - INSTITUTION: only own institution's applications
+    - REGIONAL_OFFICER and REGIONAL_HEAD: only applications in their region
+    - BUREAU_OFFICER and ADMIN: all applications
+    - EVC_MEMBER: only applications with assigned EVC inspections
+    """
+    base_query = db.query(Application)
+    query = scope_applications_by_role(base_query, current_user, db)
 
     if status_filter:
         query = query.filter(Application.status == status_filter)
 
     if escalated_only:
-        query = query.filter(Application.is_escalated == True)
+        query = query.filter(Application.status == "ESCALATED")
 
     if search:
         query = query.join(Institution).filter(
-            (Application.application_number.ilike(f"%{search}%")) |
-            (Institution.name.ilike(f"%{search}%")) |
-            (Institution.aicte_id.ilike(f"%{search}%"))
+            (Application.ref_no.ilike(f"%{search}%")) |
+            (Institution.name.ilike(f"%{search}%"))
         )
 
-    return query.order_by(Application.created_at.desc()).all()
+    return query.order_by(Application.stage_entered_at.desc()).all()
 
 @router.post("", response_model=ApplicationDetailOut)
 def create_application(
@@ -119,19 +120,51 @@ def create_application(
 
     return new_app
 
+@router.get("/evc-schedules/list")
+def list_evc_schedules(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List EVC schedules with role-based scoping."""
+    import json
+    from app.models.entities import EVCSchedule
+    query = scope_evc_schedules_by_role(db.query(EVCSchedule), current_user, db)
+    schedules = query.order_by(EVCSchedule.scheduled_date.asc()).all()
+    res = []
+    for s in schedules:
+        c_ids = []
+        try:
+            c_ids = json.loads(s.committee_ids) if isinstance(s.committee_ids, str) else s.committee_ids
+        except Exception:
+            pass
+        res.append({
+            "id": s.id,
+            "application_id": s.application_id,
+            "application_ref_no": s.application.ref_no if s.application else None,
+            "institution_name": s.application.institution.name if s.application and s.application.institution else None,
+            "scheduled_date": s.scheduled_date,
+            "status": s.status,
+            "due_date": s.due_date,
+            "completed_at": s.completed_at,
+            "is_new_institution": s.is_new_institution,
+            "committee_ids": c_ids
+        })
+    return res
+
 @router.get("/{application_id}", response_model=ApplicationDetailOut)
 def get_application(
     application_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Retrieve full application detail with all related relations."""
-    app_obj = db.query(Application).filter(Application.id == application_id).first()
+    """Retrieve full application detail with role-based scoping."""
+    scoped_query = scope_applications_by_role(db.query(Application).filter(Application.id == application_id), current_user, db)
+    app_obj = scoped_query.first()
     if not app_obj:
+        exists = db.query(Application).filter(Application.id == application_id).first()
+        if exists:
+            raise HTTPException(status_code=403, detail="Unauthorized access to this application (outside your role jurisdiction)")
         raise HTTPException(status_code=404, detail="Application not found")
-
-    if current_user.role == UserRole.INSTITUTION.value and current_user.institution_id != app_obj.institution_id:
-        raise HTTPException(status_code=403, detail="Unauthorized access to this application")
 
     return app_obj
 

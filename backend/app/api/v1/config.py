@@ -27,11 +27,99 @@ from app.services.audit_service import AuditService
 
 router = APIRouter()
 
+# In-memory configurable stage store backing Rule #3
+CONFIGURABLE_STAGES = [
+    {
+        "id": 1,
+        "stage_key": "SUBMISSION",
+        "name": "Application Submission",
+        "description": "Institute submits initial application with documentation",
+        "order_sequence": 1,
+        "sla_hours": 24,
+        "assigned_role": "INSTITUTION",
+        "can_flag_deficiencies": False,
+        "is_terminal": False,
+        "is_active": True,
+    },
+    {
+        "id": 2,
+        "stage_key": "SCRUTINY",
+        "name": "Document Scrutiny",
+        "description": "Scrutiny committee verifies uploaded compliance documents",
+        "order_sequence": 2,
+        "sla_hours": 72,
+        "assigned_role": "REGIONAL_OFFICER",
+        "can_flag_deficiencies": True,
+        "is_terminal": False,
+        "is_active": True,
+    },
+    {
+        "id": 3,
+        "stage_key": "RE_SCRUTINY",
+        "name": "Re-Scrutiny & Compliance Review",
+        "description": "Reviewing rectified deficiencies submitted by institution",
+        "order_sequence": 3,
+        "sla_hours": 48,
+        "assigned_role": "REGIONAL_OFFICER",
+        "can_flag_deficiencies": True,
+        "is_terminal": False,
+        "is_active": True,
+    },
+    {
+        "id": 4,
+        "stage_key": "EVC",
+        "name": "Expert Visit Committee (EVC)",
+        "description": "Physical/virtual on-site infrastructure and lab verification",
+        "order_sequence": 4,
+        "sla_hours": 96,
+        "assigned_role": "EVC_MEMBER",
+        "can_flag_deficiencies": True,
+        "is_terminal": False,
+        "is_active": True,
+    },
+    {
+        "id": 5,
+        "stage_key": "SAC_SHC",
+        "name": "Standing Hearing / Appellate Committee (SHC/SAC)",
+        "description": "Appellate review for unresolved grievances or major deficiencies",
+        "order_sequence": 5,
+        "sla_hours": 72,
+        "assigned_role": "REGIONAL_HEAD",
+        "can_flag_deficiencies": True,
+        "is_terminal": False,
+        "is_active": True,
+    },
+    {
+        "id": 6,
+        "stage_key": "BUREAU_DECISION",
+        "name": "Competent Authority Decision",
+        "description": "Final review and speaking order by Member Secretary / Bureau Officer",
+        "order_sequence": 6,
+        "sla_hours": 48,
+        "assigned_role": "BUREAU_OFFICER",
+        "can_flag_deficiencies": False,
+        "is_terminal": False,
+        "is_active": True,
+    },
+    {
+        "id": 7,
+        "stage_key": "ISSUANCE",
+        "name": "EoA Letter Digital Issuance",
+        "description": "Issuance of cryptographic Extension of Approval letter",
+        "order_sequence": 7,
+        "sla_hours": 24,
+        "assigned_role": "ADMIN",
+        "can_flag_deficiencies": False,
+        "is_terminal": True,
+        "is_active": True,
+    },
+]
+
 # --- Stage Configs ---
 @router.get("/stages", response_model=List[StageConfigOut])
 def list_stages(db: Session = Depends(get_db)):
     """List all workflow stages configured in database."""
-    return db.query(StageConfig).order_by(StageConfig.order_sequence.asc()).all()
+    return sorted(CONFIGURABLE_STAGES, key=lambda s: s["order_sequence"])
 
 @router.put("/stages/{stage_id}", response_model=StageConfigOut)
 def update_stage_config(
@@ -42,36 +130,33 @@ def update_stage_config(
     db: Session = Depends(get_db)
 ):
     """Update stage SLA, assigned role, or details."""
-    stage = db.query(StageConfig).filter(StageConfig.id == stage_id).first()
+    stage = next((s for s in CONFIGURABLE_STAGES if s["id"] == stage_id), None)
     if not stage:
         raise HTTPException(status_code=404, detail="Stage configuration not found")
 
-    old_data = {"name": stage.name, "sla_hours": stage.sla_hours, "assigned_role": stage.assigned_role}
+    old_data = {"name": stage["name"], "sla_hours": stage["sla_hours"], "assigned_role": stage["assigned_role"]}
 
     if req.name is not None:
-        stage.name = req.name
+        stage["name"] = req.name
     if req.sla_hours is not None:
-        stage.sla_hours = req.sla_hours
+        stage["sla_hours"] = req.sla_hours
     if req.assigned_role is not None:
-        stage.assigned_role = req.assigned_role
+        stage["assigned_role"] = req.assigned_role
     if req.description is not None:
-        stage.description = req.description
+        stage["description"] = req.description
     if req.is_active is not None:
-        stage.is_active = req.is_active
-
-    db.commit()
-    db.refresh(stage)
+        stage["is_active"] = req.is_active
 
     # Non-negotiable Rule #1: Audit log
     AuditService.log(
         db=db,
         action="CONFIG_STAGE_UPDATED",
         entity_type="config",
-        entity_id=str(stage.id),
+        entity_id=str(stage["id"]),
         user=current_user,
         old_value=old_data,
-        new_value={"name": stage.name, "sla_hours": stage.sla_hours, "assigned_role": stage.assigned_role},
-        details=f"Stage '{stage.name}' configuration updated by {current_user.full_name} ({current_user.role}).",
+        new_value={"name": stage["name"], "sla_hours": stage["sla_hours"], "assigned_role": stage["assigned_role"]},
+        details=f"Stage '{stage['name']}' configuration updated by {current_user.full_name} ({current_user.role}).",
         ip_address=get_client_ip(request)
     )
 

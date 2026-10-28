@@ -4,22 +4,29 @@
 
 export type UserRole =
   | 'INSTITUTION'
+  | 'REGIONAL_OFFICER'
+  | 'REGIONAL_HEAD'
+  | 'BUREAU_OFFICER'
+  | 'EVC_MEMBER'
+  | 'ADMIN'
   | 'SCRUTINY_OFFICER'
   | 'EVC_INSPECTOR'
-  | 'REGIONAL_OFFICER'
-  | 'COMPETENT_AUTHORITY'
-  | 'ADMIN';
+  | 'COMPETENT_AUTHORITY';
 
 export interface User {
   id: number;
   email: string;
+  name?: string;
   full_name: string;
   role: UserRole;
+  region_id?: number | null;
+  region_name?: string | null;
+  institution_id?: number | null;
+  institution_name?: string | null;
   designation?: string;
   phone?: string;
-  institution_id?: number;
   is_active: boolean;
-  created_at: string;
+  created_at?: string;
 }
 
 export interface Institution {

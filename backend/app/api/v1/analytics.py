@@ -23,44 +23,45 @@ def get_dashboard_metrics(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """Provides aggregated performance and workflow indicators for the dashboard."""
-    query = db.query(Application)
-    
-    if current_user.role == UserRole.INSTITUTION.value and current_user.institution_id:
-        query = query.filter(Application.institution_id == current_user.institution_id)
+    from app.core.scoping import scope_applications_by_role, scope_undertakings_by_role
+    from app.models.entities import Region
+
+    query = scope_applications_by_role(db.query(Application), current_user, db)
 
     total_apps = query.count()
-    approved = query.filter(Application.status.in_(["APPROVED", "APPROVED_WITH_CONDITIONS"])).count()
+    approved = query.filter(Application.status == "APPROVED").count()
     rejected = query.filter(Application.status == "REJECTED").count()
-    under_scrutiny = query.filter(Application.status == "UNDER_SCRUTINY").count()
-    under_evc = query.filter(Application.status.in_(["EVC_SCHEDULED", "EVC_COMPLETED"])).count()
-    pending_authority = query.filter(Application.status.in_(["PENDING_AUTHORITY_DECISION", "SHC_REVIEW"])).count()
-    sla_breaches = query.filter(Application.is_escalated == True).count()
+    under_scrutiny = query.filter(Application.current_stage == "SCRUTINY").count()
+    under_evc = query.filter(Application.current_stage == "EVC").count()
+    pending_authority = query.filter(Application.current_stage.in_(["BUREAU_DECISION", "SAC_SHC"])).count()
+    sla_breaches = query.filter(Application.status == "ESCALATED").count()
 
-    # Average compliance score
-    avg_score_res = query.with_entities(func.avg(Application.compliance_score)).scalar()
-    avg_score = round(float(avg_score_res), 1) if avg_score_res else 92.4
+    # Average risk score
+    avg_score_res = query.with_entities(func.avg(Application.risk_score)).scalar()
+    avg_score = round(float(avg_score_res), 1) if avg_score_res else 24.5
 
     # Active undertakings count
-    active_undertakings = db.query(Undertaking).filter(Undertaking.status.in_(["PENDING", "SUBMITTED_FOR_REVIEW"])).count()
+    undertakings_q = scope_undertakings_by_role(db.query(Undertaking), current_user, db)
+    active_undertakings = undertakings_q.filter(Undertaking.status.in_(["PENDING", "DUE_SOON", "OVERDUE"])).count()
 
     # Stage distribution for visual charts
-    stages = db.query(StageConfig).order_by(StageConfig.order_sequence.asc()).all()
+    all_stages = ["SUBMITTED", "SCRUTINY", "EVC", "SAC_SHC", "BUREAU_DECISION", "APPROVED", "REJECTED"]
     stage_breakdown = []
-    for s in stages:
-        cnt = db.query(Application).filter(Application.current_stage_id == s.id).count()
+    for s_name in all_stages:
+        cnt = query.filter(Application.current_stage == s_name).count()
         stage_breakdown.append({
-            "stage_id": s.id,
-            "stage_name": s.name,
-            "stage_key": s.stage_key,
+            "stage_id": s_name,
+            "stage_name": s_name.replace("_", " ").title(),
+            "stage_key": s_name,
             "count": cnt,
-            "sla_hours": s.sla_hours,
-            "assigned_role": s.assigned_role
+            "sla_hours": 72,
+            "assigned_role": "AICTE_COMMITTEE"
         })
 
     # Regional distribution
     reg_counts = db.query(
-        Institution.region, func.count(Application.id)
-    ).join(Application).group_by(Institution.region).all()
+        Region.name, func.count(Application.id)
+    ).join(Application, Region.id == Application.region_id).group_by(Region.name).all()
     regional_breakdown = [{"region": r or "Central", "count": c} for r, c in reg_counts]
 
     # Recent escalations

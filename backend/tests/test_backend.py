@@ -42,8 +42,8 @@ def test_rule_1_audit_log_on_login():
 
 def test_rule_2_human_oversight_required_on_decision():
     """Verify that decisions require human authority and checklist verification."""
-    # Login as Competent Authority
-    token = create_access_token(data={"sub": "6", "role": "COMPETENT_AUTHORITY", "email": "member.secretary@aicte.gov.in"})
+    # Login as Competent Authority (User 3 = member.secretary@aicte.gov.in, BUREAU_OFFICER)
+    token = create_access_token(data={"sub": "3", "role": "COMPETENT_AUTHORITY", "email": "member.secretary@aicte.gov.in"})
     headers = {"Authorization": f"Bearer {token}"}
 
     # Attempt decision WITHOUT complete checklist
@@ -85,7 +85,8 @@ def test_rule_2_human_oversight_required_on_decision():
 
 def test_rule_3_configurable_routes_and_slas():
     """Verify that stage routes and SLAs are read dynamically from DB and configurable."""
-    token = create_access_token(data={"sub": "7", "role": "ADMIN", "email": "admin@aicte.gov.in"})
+    # User 1 is admin@aicte.gov.in
+    token = create_access_token(data={"sub": "1", "role": "ADMIN", "email": "admin@aicte.gov.in"})
     headers = {"Authorization": f"Bearer {token}"}
 
     # Get stages
@@ -113,8 +114,8 @@ def test_rule_3_configurable_routes_and_slas():
 
 def test_rule_5_rbac_enforcement():
     """Verify that unauthorized roles are blocked."""
-    # Login as Institution
-    token = create_access_token(data={"sub": "1", "role": "INSTITUTION", "email": "institute@ditm.ac.in"})
+    # Login as Institution (User 24 is principal@ditm.ac.in)
+    token = create_access_token(data={"sub": "24", "role": "INSTITUTION", "email": "principal@ditm.ac.in"})
     headers = {"Authorization": f"Bearer {token}"}
 
     # Attempt to access competent authority decision endpoint as Institution

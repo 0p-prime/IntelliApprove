@@ -22,7 +22,7 @@ def query_audit_logs(
     user_email: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = Query(100, le=500),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles([UserRole.ADMIN.value, UserRole.BUREAU_OFFICER.value, UserRole.REGIONAL_HEAD.value])),
     db: Session = Depends(get_db)
 ):
     """
@@ -30,10 +30,6 @@ def query_audit_logs(
     Available to auditors, vigilance officers, administrators, and committee members.
     """
     query = db.query(AuditLog)
-
-    # Scoping: Institutions can only see audit records for their own applications
-    if current_user.role == UserRole.INSTITUTION.value:
-        query = query.filter(AuditLog.user_id == current_user.id)
 
     if action:
         query = query.filter(AuditLog.action == action)

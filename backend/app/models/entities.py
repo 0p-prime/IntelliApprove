@@ -16,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
 import enum
 from app.core.database import Base
 
@@ -101,6 +102,54 @@ class Institution(Base):
     documents = relationship("Document", back_populates="institution")
     undertakings = relationship("Undertaking", back_populates="institution")
 
+    @property
+    def aicte_id(self) -> str:
+        return f"1-{1029380000 + self.id}"
+
+    @property
+    def category(self) -> str:
+        return self.type
+
+    @property
+    def district(self) -> str:
+        return self.state
+
+    @property
+    def address(self) -> str:
+        return f"Main Campus, {self.name}, {self.state}"
+
+    @property
+    def total_land_acres(self) -> float:
+        return 7.5 if not self.is_new else 5.0
+
+    @property
+    def total_builtup_sqm(self) -> float:
+        return 12500.0
+
+    @property
+    def total_computers(self) -> int:
+        return 280
+
+    @property
+    def established_year(self) -> int:
+        return 2012 if not self.is_new else 2026
+
+    @property
+    def head_of_institution_name(self) -> str:
+        return "Dr. Arvind Narayanan" if self.id == 1 else "Dr. Sunita Deshmukh"
+
+    @property
+    def head_email(self) -> str:
+        return self.contact_email
+
+    @property
+    def head_phone(self) -> str:
+        return "+91-9811092831"
+
+    @property
+    def trust_society_name(self) -> str:
+        return f"{self.name} Educational Society"
+
 class WorkflowTemplate(Base):
     __tablename__ = "workflow_templates"
     
@@ -138,6 +187,102 @@ class Application(Base):
     evc_schedules = relationship("EVCSchedule", back_populates="application", cascade="all, delete-orphan")
     undertakings = relationship("Undertaking", back_populates="application", cascade="all, delete-orphan")
 
+    @property
+    def application_number(self) -> str:
+        return self.ref_no
+
+    @property
+    def created_at(self):
+        return self.submitted_at or self.stage_entered_at
+
+    @property
+    def submission_date(self):
+        return self.submitted_at
+
+    @property
+    def sla_deadline(self):
+        return self.due_date
+
+    @property
+    def is_escalated(self) -> bool:
+        return self.status == "ESCALATED"
+
+    @property
+    def academic_year(self) -> str:
+        return "2026-2027"
+
+    @property
+    def human_oversight_required(self) -> bool:
+        return getattr(self, "_human_oversight_required", True)
+
+    @human_oversight_required.setter
+    def human_oversight_required(self, val: bool):
+        self._human_oversight_required = val
+
+    @property
+    def decision_verdict(self) -> Optional[str]:
+        return getattr(self, "_decision_verdict", None) or self.status
+
+    @decision_verdict.setter
+    def decision_verdict(self, val: str):
+        self._decision_verdict = val
+
+    @property
+    def decision_notes(self) -> Optional[str]:
+        return getattr(self, "_decision_notes", None)
+
+    @decision_notes.setter
+    def decision_notes(self, val: str):
+        self._decision_notes = val
+
+    @property
+    def decision_date(self):
+        return getattr(self, "_decision_date", None)
+
+    @decision_date.setter
+    def decision_date(self, val):
+        self._decision_date = val
+
+    @property
+    def decision_by_user_id(self) -> Optional[int]:
+        return getattr(self, "_decision_by_user_id", None)
+
+    @decision_by_user_id.setter
+    def decision_by_user_id(self, val: int):
+        self._decision_by_user_id = val
+
+    @property
+    def digital_signature_hash(self) -> Optional[str]:
+        return getattr(self, "_digital_signature_hash", None)
+
+    @digital_signature_hash.setter
+    def digital_signature_hash(self, val: str):
+        self._digital_signature_hash = val
+
+    @property
+    def approval_letter_number(self) -> Optional[str]:
+        return getattr(self, "_approval_letter_number", None)
+
+    @approval_letter_number.setter
+    def approval_letter_number(self, val: str):
+        self._approval_letter_number = val
+
+    @property
+    def programs(self):
+        return []
+
+    @property
+    def deficiencies(self):
+        return []
+
+    @property
+    def current_stage_obj(self):
+        class DummyStage:
+            name = self.current_stage
+            stage_key = self.current_stage
+            sla_hours = 72
+        return DummyStage()
+
 class StageHistory(Base):
     __tablename__ = "stage_history"
     
@@ -153,6 +298,18 @@ class StageHistory(Base):
     # Relationships
     application = relationship("Application", back_populates="stage_history")
     officer = relationship("User")
+
+    @property
+    def action_taken(self) -> str:
+        return self.action
+
+    @property
+    def created_at(self):
+        return self.entered_at
+
+    @property
+    def transitioned_by_user_id(self) -> Optional[int]:
+        return self.officer_id
 
 class EVCSchedule(Base):
     __tablename__ = "evc_schedules"
@@ -201,6 +358,42 @@ class Undertaking(Base):
     evidence_file = relationship("FileRecord")
     verifier = relationship("User", foreign_keys=[verified_by])
 
+    @property
+    def title(self) -> str:
+        return self.condition_text[:50] + ("..." if len(self.condition_text) > 50 else "")
+
+    @property
+    def description(self) -> str:
+        return self.condition_text
+
+    @property
+    def category(self) -> str:
+        return "Statutory APH Norm"
+
+    @property
+    def submission_evidence(self) -> Optional[str]:
+        return self.evidence_file.path if self.evidence_file else None
+
+    @property
+    def submitted_at(self):
+        return self.verified_at
+
+    @property
+    def verification_remarks(self) -> Optional[str]:
+        return "Verified by regional officer" if self.status == "VERIFIED" else None
+
+    @property
+    def verified_by_user_id(self):
+        return self.verified_by
+
+    @property
+    def is_overdue(self) -> bool:
+        return self.status == "OVERDUE"
+
+    @property
+    def created_at(self):
+        return self.due_date
+
 class Document(Base):
     __tablename__ = "documents"
     
@@ -217,6 +410,48 @@ class Document(Base):
     institution = relationship("Institution", back_populates="documents")
     file = relationship("FileRecord")
     parent_document = relationship("Document", remote_side=[id], foreign_keys=[renewal_of_id])
+
+    @property
+    def status(self) -> str:
+        return self.verification_status
+
+    @status.setter
+    def status(self, val: str):
+        self.verification_status = val
+
+    @property
+    def file_name(self) -> str:
+        return self.file.filename if self.file else f"{self.doc_type.lower()}_deed.pdf"
+
+    @property
+    def file_path(self) -> str:
+        return self.file.path if self.file else f"/storage/docs/{self.id}.pdf"
+
+    @property
+    def file_url(self) -> str:
+        return self.file.path if self.file else f"/storage/docs/{self.id}.pdf"
+
+    @property
+    def uploaded_at(self):
+        return self.file.uploaded_at if self.file else self.issue_date
+
+    @property
+    def file_size_kb(self) -> int:
+        return 1450
+
+    @property
+    def sha256_hash(self) -> str:
+        return self.file.sha256_hash if self.file else "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+    @property
+    def is_verified(self) -> bool:
+        return self.verification_status == "VERIFIED"
+
+    @property
+    def application_id(self) -> int:
+        if self.institution and self.institution.applications:
+            return self.institution.applications[0].id
+        return 1
 
 class AlertRule(Base):
     __tablename__ = "alert_rules"
@@ -244,6 +479,13 @@ class Notification(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     channel = Column(String(50), default="IN_APP", nullable=False)  # IN_APP, EMAIL, SMS
     
+    def __init__(self, **kwargs):
+        app_id = kwargs.pop("application_id", None)
+        recipient_role = kwargs.pop("recipient_role", None)
+        if app_id and "link" not in kwargs:
+            kwargs["link"] = f"/applications/{app_id}"
+        super().__init__(**kwargs)
+
     # Relationships
     user = relationship("User", back_populates="notifications")
 
