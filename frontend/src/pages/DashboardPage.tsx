@@ -52,10 +52,13 @@ import {
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { ErrorState } from '../components/States';
 import { HumanOversightBadge } from '../components/HumanOversightBadge';
+import { RiskScoreBadge } from '../components/RiskScoreBadge';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   // Data states
@@ -67,6 +70,7 @@ export const DashboardPage: React.FC = () => {
   const [bottleneckData, setBottleneckData] = useState<BottleneckItem[]>([]);
   const [deadlinesData, setDeadlinesData] = useState<UpcomingDeadlineItem[]>([]);
   const [docExpiringSummary, setDocExpiringSummary] = useState<DocumentExpiringSummary | null>(null);
+  const [highRiskCases, setHighRiskCases] = useState<any[]>([]);
 
   // State flags
   const [loading, setLoading] = useState<boolean>(true);
@@ -113,7 +117,8 @@ export const DashboardPage: React.FC = () => {
         workloadRes,
         bottleneckRes,
         deadlinesRes,
-        docSummaryRes
+        docSummaryRes,
+        highRiskRes
       ] = await Promise.all([
         apiRequest<DashboardSummaryData>(`/dashboard/summary${qStr}`),
         apiRequest<StageFunnelItem[]>(`/dashboard/stage-funnel${qStr}`),
@@ -122,7 +127,8 @@ export const DashboardPage: React.FC = () => {
         apiRequest<OfficerWorkloadItem[]>(`/dashboard/officer-workload${qStr}`),
         apiRequest<BottleneckItem[]>(`/dashboard/bottlenecks${qStr}`),
         apiRequest<UpcomingDeadlineItem[]>(`/dashboard/upcoming-deadlines?days=14`),
-        apiRequest<DocumentExpiringSummary>(`/documents/expiring-summary`).catch(() => null)
+        apiRequest<DocumentExpiringSummary>(`/documents/expiring-summary`).catch(() => null),
+        apiRequest<any[]>(`/dashboard/high-risk?limit=6`).catch(() => [])
       ]);
 
       setSummaryData(summaryRes);
@@ -133,6 +139,7 @@ export const DashboardPage: React.FC = () => {
       setBottleneckData(bottleneckRes);
       setDeadlinesData(deadlinesRes);
       if (docSummaryRes) setDocExpiringSummary(docSummaryRes);
+      setHighRiskCases(highRiskRes || []);
       setLastUpdated(new Date());
       setCountdown(30);
     } catch (err: any) {
@@ -440,6 +447,90 @@ export const DashboardPage: React.FC = () => {
             <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
           </div>
         </Link>
+      </div>
+
+      {/* High Delay Risk Cases Widget (Transparent Weighted Algorithm) */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-700 font-bold shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-800">
+                  {t('dash.high_risk', 'High Delay Risk Cases')}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                  Explainable Formula
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Computed via weighted formula: 30% Stage SLA Overrun + 20% Regional Benchmark + 20% Officer Workload + 15% Returns + 15% New Campus
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/applications?status=IN_PROGRESS"
+            className="text-xs text-blue-700 hover:text-blue-900 font-semibold flex items-center gap-1 self-start sm:self-auto cursor-pointer"
+          >
+            All Active Cases <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {highRiskCases.length === 0 ? (
+          <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-xl">
+            No high delay risk bottleneck cases detected in the current queue.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {highRiskCases.map((c) => (
+              <div
+                key={c.application_id}
+                className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-rose-400 hover:shadow-xs transition-all space-y-2.5 flex flex-col justify-between"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link
+                      to={`/applications/${c.application_id}`}
+                      className="font-mono font-bold text-xs text-slate-900 hover:text-blue-700 block truncate"
+                    >
+                      {c.ref_no}
+                    </Link>
+                    <div className="text-xs font-semibold text-slate-700 truncate" title={c.institution_name}>
+                      {c.institution_name}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {c.region_name} • Stage: <strong className="text-slate-600">{c.current_stage}</strong>
+                    </div>
+                  </div>
+
+                  <RiskScoreBadge
+                    score={c.risk_score}
+                    level={c.risk_level}
+                    primaryDriver={c.primary_driver}
+                    primaryDriverDetails={c.primary_driver_details}
+                    factors={c.factors}
+                    compact={true}
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 text-[10px] truncate max-w-[190px]" title={c.primary_driver_details}>
+                    Driver: <strong className="text-slate-700">{c.primary_driver}</strong>
+                  </span>
+                  <Link
+                    to={`/applications/${c.application_id}`}
+                    className="text-blue-700 hover:text-blue-900 font-bold font-mono text-[10px] flex items-center gap-0.5 shrink-0"
+                  >
+                    Inspect <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 3. Role-Customized Visual Dashboard Body */}

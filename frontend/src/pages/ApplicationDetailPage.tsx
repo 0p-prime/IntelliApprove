@@ -36,6 +36,7 @@ import {
 } from '../types';
 import { HumanOversightBadge } from '../components/HumanOversightBadge';
 import { StatusPill } from '../components/StatusPill';
+import { RiskScoreBadge } from '../components/RiskScoreBadge';
 import { LoadingState, ErrorState } from '../components/States';
 import { VisualStageStepper } from '../components/VisualStageStepper';
 import { CaseSummaryModal } from '../components/CaseSummaryModal';
@@ -57,6 +58,7 @@ export const ApplicationDetailPage: React.FC = () => {
   const [fullHistory, setFullHistory] = useState<ApplicationFullHistoryResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState<boolean>(false);
   const [historyFilter, setHistoryFilter] = useState<string>('ALL');
+  const [riskData, setRiskData] = useState<any>(null);
 
   // Case Summary Modal states
   const [caseSummary, setCaseSummary] = useState<CaseSummaryData | null>(null);
@@ -128,16 +130,18 @@ export const ApplicationDetailPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [appData, timelineData, actionsData, fullHistoryData] = await Promise.all([
+      const [appData, timelineData, actionsData, fullHistoryData, riskScoreData] = await Promise.all([
         apiRequest<Application>(`/applications/${id}`),
         apiRequest<TimelineData>(`/applications/${id}/timeline`).catch(() => null),
         apiRequest<WorkflowRoute[]>(`/workflow/allowed-actions/${id}`).catch(() => []),
         apiRequest<ApplicationFullHistoryResponse>(`/applications/${id}/full-history`).catch(() => null),
+        apiRequest<any>(`/applications/${id}/risk-score`).catch(() => null),
       ]);
       setApplication(appData);
       setTimeline(timelineData);
       setAllowedActions(actionsData);
       if (fullHistoryData) setFullHistory(fullHistoryData);
+      if (riskScoreData) setRiskData(riskScoreData);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch application');
     } finally {
@@ -440,6 +444,16 @@ export const ApplicationDetailPage: React.FC = () => {
                 {application.ref_no || application.application_number}
               </h1>
               <StatusPill status={application.status} isEscalated={application.is_escalated} />
+              {riskData && (
+                <RiskScoreBadge
+                  score={riskData.risk_score}
+                  level={riskData.risk_level}
+                  primaryDriver={riskData.primary_driver}
+                  primaryDriverDetails={riskData.primary_driver_details}
+                  formula={riskData.formula}
+                  factors={riskData.factors}
+                />
+              )}
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
                 AY {application.academic_year || '2026-2027'}
               </span>

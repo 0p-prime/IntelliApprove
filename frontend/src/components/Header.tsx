@@ -9,9 +9,11 @@ import {
   LogOut,
   Building2,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  Globe
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { AlertsDrawer } from './AlertsDrawer';
 import { TimeTravelWidget } from './TimeTravelWidget';
 import { apiRequest } from '../api/client';
@@ -19,6 +21,7 @@ import { Alert } from '../types';
 
 export const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSidebar }) => {
   const { user, switchRole, logout, demoUsers } = useAuth();
+  const { language, toggleLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
@@ -138,6 +141,18 @@ export const Header: React.FC<{ onToggleSidebar?: () => void }> = ({ onToggleSid
 
           {/* Right: Role Badge, Quick Demo Switcher, Notification Bell & Logout */}
           <div className="flex items-center gap-2.5 sm:gap-3.5">
+            {/* Multilingual Toggle (English / Hindi) */}
+            <button
+              onClick={toggleLanguage}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 border border-white/25 text-xs font-semibold text-white transition-all cursor-pointer shadow-xs"
+              title={language === 'en' ? 'स्विच करें: हिंदी (HI)' : 'Switch to: English (EN)'}
+            >
+              <Globe className="w-3.5 h-3.5 text-amber-300" />
+              <span className="font-medium tracking-tight">
+                {language === 'en' ? '🇮🇳 हिंदी' : '🇬🇧 EN'}
+              </span>
+            </button>
+
             {/* Time-Travel Demo Clock Controller */}
             <TimeTravelWidget />
 

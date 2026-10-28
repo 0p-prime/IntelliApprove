@@ -481,7 +481,7 @@ class WorkflowService:
         # 5. Deficiency Rectifications & Verifications
         deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
         for d in deficiencies:
-            if d.rectification_file_id or d.is_rectified:
+            if getattr(d, 'rectification_proof', None) or d.is_rectified:
                 rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
                 events.append({
                     "id": f"def_rect_{d.id}",
@@ -859,7 +859,7 @@ class WorkflowService:
         # 5. Deficiency Rectifications & Verifications
         deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
         for d in deficiencies:
-            if d.rectification_file_id or d.is_rectified:
+            if getattr(d, 'rectification_proof', None) or d.is_rectified:
                 rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
                 events.append({
                     "id": f"def_rect_{d.id}",
@@ -1683,7 +1683,7 @@ class WorkflowService:
         # 5. Deficiency Rectifications & Verifications
         deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
         for d in deficiencies:
-            if d.rectification_file_id or d.is_rectified:
+            if getattr(d, 'rectification_proof', None) or d.is_rectified:
                 rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
                 events.append({
                     "id": f"def_rect_{d.id}",

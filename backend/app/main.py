@@ -20,6 +20,10 @@ from app.api.v1.system_clock import router as system_clock_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.risk import router as risk_router
+from app.api.v1.ocr import router as ocr_router
+from app.api.v1.integration import router as integration_router
+from app.api.v1.assistant import router as assistant_router
 from app.services.scheduler_service import start_scheduler, shutdown_scheduler
 from app.seed import seed_database
 
@@ -68,6 +72,10 @@ app.include_router(system_clock_router, prefix="/clock", tags=["Clock Direct"])
 app.include_router(admin_router, prefix="/admin", tags=["Admin Direct"])
 app.include_router(audit_router, prefix="/audit", tags=["Audit Direct"])
 app.include_router(reports_router, prefix="/reports", tags=["Reports Direct"])
+app.include_router(risk_router, tags=["Risk Direct"])
+app.include_router(ocr_router, tags=["OCR Direct"])
+app.include_router(integration_router, prefix="/integration", tags=["Integration Direct"])
+app.include_router(assistant_router, prefix="/assistant", tags=["Assistant Direct"])
 
 @app.get("/")
 def root():

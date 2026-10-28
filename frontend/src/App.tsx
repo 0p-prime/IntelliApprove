@@ -18,6 +18,9 @@ import { AdminSettingsPage } from './pages/AdminSettingsPage';
 import { WorkflowConfigPage } from './pages/WorkflowConfigPage';
 import { EscalationLadderPage } from './pages/EscalationLadderPage';
 import { ComplianceRulesPage } from './pages/ComplianceRulesPage';
+import { IntegrationPage } from './pages/IntegrationPage';
+import { AIAssistantWidget } from './components/AIAssistantWidget';
+import { LanguageProvider } from './context/LanguageContext';
 import { LoadingState } from './components/States';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({
@@ -205,6 +208,14 @@ const AppShell: React.FC = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/integration"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER']}>
+                  <IntegrationPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -222,6 +233,9 @@ const AppShell: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Role-Scoped AI Statutory Query & Drafting Assistant */}
+      <AIAssistantWidget />
     </div>
   );
 };
@@ -229,9 +243,11 @@ const AppShell: React.FC = () => {
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppShell />
-      </BrowserRouter>
+      <LanguageProvider>
+        <BrowserRouter>
+          <AppShell />
+        </BrowserRouter>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

@@ -23,7 +23,9 @@ import {
   ShieldAlert,
   Hash,
   Check,
-  X
+  X,
+  Sparkles,
+  Scan
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import {
@@ -61,6 +63,16 @@ export const DocumentsPage: React.FC = () => {
   const [renewalFile, setRenewalFile] = useState<File | null>(null);
   const [renewalSubmitting, setRenewalSubmitting] = useState<boolean>(false);
   const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [ocrScanning, setOcrScanning] = useState<boolean>(false);
+  const [ocrResult, setOcrResult] = useState<{
+    extracted_expiry_date: string | null;
+    confidence: number;
+    confidence_level: string;
+    found: boolean;
+    raw_match?: string;
+    context_snippet?: string;
+    disclaimer: string;
+  } | null>(null);
 
   // Verification Modal (Officer)
   const [verifyModalDoc, setVerifyModalDoc] = useState<DocumentItem | null>(null);
@@ -111,8 +123,8 @@ export const DocumentsPage: React.FC = () => {
     }
   };
 
-  // Handle Renewal File Selection
-  const handleRenewalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Renewal File Selection with Automated Lease OCR Assist
+  const handleRenewalFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
       if (f.size > 15 * 1024 * 1024) {
@@ -122,6 +134,26 @@ export const DocumentsPage: React.FC = () => {
       }
       setRenewalFile(f);
       setRenewalError(null);
+      setOcrResult(null);
+
+      // Call OCR Assist endpoint to extract and pre-fill expiry date
+      setOcrScanning(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', f);
+        const res: any = await apiRequest('/documents/ocr-extract-expiry', {
+          method: 'POST',
+          body: formData,
+        });
+        if (res && res.found && res.extracted_expiry_date) {
+          setOcrResult(res);
+          setRenewalExpiryDate(res.extracted_expiry_date);
+        }
+      } catch (ocrErr) {
+        console.warn('Lease OCR Assist notice:', ocrErr);
+      } finally {
+        setOcrScanning(false);
+      }
     }
   };
 
@@ -158,6 +190,8 @@ export const DocumentsPage: React.FC = () => {
       setRenewalFile(null);
       setRenewalIssueDate('');
       setRenewalExpiryDate('');
+      setOcrResult(null);
+      setOcrScanning(false);
       await fetchAllData();
     } catch (err: any) {
       setRenewalError(err.message || 'Renewal upload failed');
@@ -769,6 +803,44 @@ export const DocumentsPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Lease OCR Assist Scanning Indicator */}
+              {ocrScanning && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2.5 animate-pulse">
+                  <Scan className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
+                  <div>
+                    <div className="font-bold">Lease OCR Assist Scanning...</div>
+                    <div className="text-[11px] text-amber-700">Parsing lease deed text for expiry & tenure clauses to pre-fill expiry date.</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Lease OCR Assist Extracted Result */}
+              {ocrResult && ocrResult.found && (
+                <div className="p-3 bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl text-xs space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 font-bold text-emerald-900">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      Lease OCR Assist Pre-Filled Expiry
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                      {ocrResult.confidence_level} Confidence ({(ocrResult.confidence * 100).toFixed(0)}%)
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-700">
+                    Extracted Date: <strong className="font-mono text-emerald-800">{ocrResult.extracted_expiry_date}</strong>
+                    {ocrResult.context_snippet && (
+                      <span className="block italic text-slate-500 text-[10px] mt-0.5 bg-white/70 p-1 rounded border border-slate-200/50">
+                        "{ocrResult.context_snippet}"
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-amber-800 font-medium flex items-center gap-1 pt-0.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Strict Human Oversight: Pre-filled via OCR. Please verify against physical deed before submitting. Never auto-verified.</span>
+                  </div>
+                </div>
+              )}
+
               {renewalError && (
                 <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
                   {renewalError}
@@ -781,6 +853,8 @@ export const DocumentsPage: React.FC = () => {
                   onClick={() => {
                     setRenewalModalDoc(null);
                     setRenewalFile(null);
+                    setOcrResult(null);
+                    setOcrScanning(false);
                   }}
                   className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
                 >

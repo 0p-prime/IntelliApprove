@@ -13,9 +13,11 @@ import {
   PlusCircle,
   GitBranch,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  Share2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { apiRequest } from '../api/client';
 
 export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
@@ -23,6 +25,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
   onClose,
 }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -37,67 +40,73 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose?: () => void }> = ({
   const allNavItems = [
     {
       to: '/',
-      label: 'Dashboard',
+      label: t('nav.dashboard', 'Dashboard'),
       icon: LayoutDashboard,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
     },
     {
       to: '/applications',
-      label: role === 'INSTITUTION' ? 'My Applications' : 'Applications',
+      label: role === 'INSTITUTION' ? t('nav.my_applications', 'My Applications') : t('nav.applications', 'Applications'),
       icon: FileText,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
     },
     {
       to: '/applications/new',
-      label: 'New Application',
+      label: t('nav.new_application', 'New Application'),
       icon: PlusCircle,
       roles: ['ADMIN', 'INSTITUTION']
     },
     {
       to: '/evc',
-      label: role === 'EVC_MEMBER' ? 'Assigned Inspections' : 'EVC Inspections',
+      label: role === 'EVC_MEMBER' ? t('nav.assigned_inspections', 'Assigned Inspections') : t('nav.evc', 'EVC Inspections'),
       icon: Users,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER']
     },
     {
       to: '/undertakings',
-      label: 'Undertakings',
+      label: t('nav.undertakings', 'Undertakings Compliance'),
       icon: FileCheck2,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
     },
     {
       to: '/documents',
-      label: 'Document Store',
+      label: t('nav.documents', 'Document & Lease Validity'),
       icon: FolderClosed,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER', 'INSTITUTION']
     },
     {
       to: '/alerts',
-      label: 'Alerts & Escalations',
+      label: t('nav.alerts', 'Alerts & Escalations'),
       icon: Bell,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'INSTITUTION']
     },
     {
       to: '/reports',
-      label: 'Reports & Analytics',
+      label: t('nav.reports', 'Statutory Reports'),
       icon: BarChart3,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER']
     },
     {
       to: '/audit',
-      label: 'System Audit Trail',
+      label: t('nav.audit', 'System Audit Trail'),
       icon: History,
       roles: ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD']
     },
     {
+      to: '/integration',
+      label: t('nav.integration', 'AICTE Portal Bridge'),
+      icon: Share2,
+      roles: ['ADMIN', 'BUREAU_OFFICER']
+    },
+    {
       to: '/config/workflow',
-      label: 'Workflow Routes',
+      label: t('nav.workflow_routes', 'Workflow Routes'),
       icon: GitBranch,
       roles: ['ADMIN', 'BUREAU_OFFICER']
     },
     {
       to: '/admin',
-      label: 'Admin Settings',
+      label: t('nav.admin_settings', 'Admin Settings'),
       icon: Settings,
       roles: ['ADMIN']
     },

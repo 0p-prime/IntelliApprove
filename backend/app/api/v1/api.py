@@ -18,7 +18,11 @@ from app.api.v1 import (
     institutions,
     system_clock,
     admin,
-    reports
+    reports,
+    risk,
+    ocr,
+    integration,
+    assistant
 )
 
 api_router = APIRouter()
@@ -39,3 +43,9 @@ api_router.include_router(audit.router, prefix="/audit", tags=["Audit Trail"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Dashboard"])
 api_router.include_router(institutions.router, prefix="/institutions", tags=["Institutions"])
 api_router.include_router(reports.router, prefix="/reports", tags=["Statutory Reports"])
+
+# Differentiating Module Routers
+api_router.include_router(risk.router, tags=["Delay Risk Scoring"])
+api_router.include_router(ocr.router, tags=["OCR Assist"])
+api_router.include_router(integration.router, tags=["Integration Adapter"])
+api_router.include_router(assistant.router, tags=["Natural Language Assistant"])
