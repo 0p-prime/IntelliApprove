@@ -4,6 +4,7 @@ Rule #1: Every state change writes an audit_logs entry.
 Provides transparency, vigilance trail, and SHA-256 tamper-evident history.
 """
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -20,6 +21,10 @@ def query_audit_logs(
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
     user_email: Optional[str] = None,
+    actor_id: Optional[int] = None,
+    actor_email: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = Query(100, le=500),
     current_user: User = Depends(require_roles([
@@ -31,7 +36,7 @@ def query_audit_logs(
     db: Session = Depends(get_db)
 ):
     """
-    Search and inspect audit logs with granular filters.
+    Search and inspect audit logs with granular filters (actor, action, entity, date range, search).
     Available to auditors, vigilance officers, administrators, and regional officers.
     """
     query = db.query(AuditLog)
@@ -42,6 +47,29 @@ def query_audit_logs(
         query = query.filter(AuditLog.entity_type == entity_type)
     if entity_id:
         query = query.filter(AuditLog.entity_id == entity_id)
+    if actor_id:
+        query = query.filter(AuditLog.actor_id == actor_id)
+
+    target_email = actor_email or user_email
+    if target_email:
+        query = query.join(User, AuditLog.actor_id == User.id).filter(
+            User.email.ilike(f"%{target_email}%")
+        )
+
+    if from_date:
+        try:
+            dt_from = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+            query = query.filter(AuditLog.timestamp >= dt_from)
+        except Exception:
+            pass
+
+    if to_date:
+        try:
+            dt_to = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
+            query = query.filter(AuditLog.timestamp <= dt_to)
+        except Exception:
+            pass
+
     if search:
         query = query.filter(
             (AuditLog.reason.ilike(f"%{search}%")) |

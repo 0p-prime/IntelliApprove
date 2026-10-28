@@ -17,7 +17,8 @@ from app.api.v1 import (
     evc,
     institutions,
     system_clock,
-    admin
+    admin,
+    reports
 )
 
 api_router = APIRouter()
@@ -37,3 +38,4 @@ api_router.include_router(config.router, prefix="/config", tags=["Dynamic Config
 api_router.include_router(audit.router, prefix="/audit", tags=["Audit Trail"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Dashboard"])
 api_router.include_router(institutions.router, prefix="/institutions", tags=["Institutions"])
+api_router.include_router(reports.router, prefix="/reports", tags=["Statutory Reports"])

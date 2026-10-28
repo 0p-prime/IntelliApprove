@@ -30,7 +30,9 @@ import {
   WorkflowRoute,
   ComplianceNormRule,
   TimelineData,
-  CaseSummaryData
+  CaseSummaryData,
+  ApplicationFullHistoryResponse,
+  FullHistoryEvent
 } from '../types';
 import { HumanOversightBadge } from '../components/HumanOversightBadge';
 import { StatusPill } from '../components/StatusPill';
@@ -50,6 +52,11 @@ export const ApplicationDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'compliance' | 'documents' | 'evc' | 'decision' | 'undertakings' | 'audit'
   >('overview');
+
+  // Full History State (Section A & Audit Trail)
+  const [fullHistory, setFullHistory] = useState<ApplicationFullHistoryResponse | null>(null);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(false);
+  const [historyFilter, setHistoryFilter] = useState<string>('ALL');
 
   // Case Summary Modal states
   const [caseSummary, setCaseSummary] = useState<CaseSummaryData | null>(null);
@@ -103,19 +110,34 @@ export const ApplicationDetailPage: React.FC = () => {
   const [rectifyingDefId, setRectifyingDefId] = useState<number | null>(null);
   const [rectificationProof, setRectificationProof] = useState('');
 
+  const fetchFullHistory = async () => {
+    if (!id) return;
+    setHistoryLoading(true);
+    try {
+      const data = await apiRequest<ApplicationFullHistoryResponse>(`/applications/${id}/full-history`);
+      setFullHistory(data);
+    } catch (err) {
+      console.error('Failed to load application full history', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const fetchApplicationDetails = async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const [appData, timelineData, actionsData] = await Promise.all([
+      const [appData, timelineData, actionsData, fullHistoryData] = await Promise.all([
         apiRequest<Application>(`/applications/${id}`),
         apiRequest<TimelineData>(`/applications/${id}/timeline`).catch(() => null),
         apiRequest<WorkflowRoute[]>(`/workflow/allowed-actions/${id}`).catch(() => []),
+        apiRequest<ApplicationFullHistoryResponse>(`/applications/${id}/full-history`).catch(() => null),
       ]);
       setApplication(appData);
       setTimeline(timelineData);
       setAllowedActions(actionsData);
+      if (fullHistoryData) setFullHistory(fullHistoryData);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch application');
     } finally {
@@ -536,7 +558,7 @@ export const ApplicationDetailPage: React.FC = () => {
           { key: 'evc', label: 'EVC Physical Inspection', icon: Users },
           { key: 'decision', label: 'Competent Authority Decision', icon: Award, highlight: true },
           { key: 'undertakings', label: `Undertakings (${application.undertakings?.length || 0})`, icon: FileCheck2 },
-          { key: 'audit', label: 'Immutable Audit Trail', icon: History },
+          { key: 'audit', label: `Full History & Audit (${fullHistory?.total_events || 0})`, icon: History },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -1238,66 +1260,234 @@ export const ApplicationDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 7: IMMUTABLE AUDIT TRAIL (CRITICAL RULE #1) */}
+        {/* TAB 7: IMMUTABLE AUDIT TRAIL & FULL HISTORY */}
         {activeTab === 'audit' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
-                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <History className="w-4 h-4 text-slate-500" />
-                  Application Lifecycle Audit History
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Non-Negotiable Rule #1: Every state change, inspection, report, and decision is cryptographically logged.
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <History className="w-4 h-4 text-slate-500" />
+                    Per-Application Full History & Multi-Stream Audit Log
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Rule #1 Cryptographic Integrity
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Unified statutory history combining stage progressions, inspection committee visits, legal undertakings, deficiency rectifications, alert notifications, and SLA escalations.
                 </p>
               </div>
-              <Link
-                to="/audit"
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
-              >
-                Global Audit Explorer <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={fetchFullHistory}
+                  disabled={historyLoading}
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <Link
+                  to="/audit"
+                  className="px-3 py-1.5 bg-[#0B2240] hover:bg-[#07172C] text-white rounded-md text-xs font-semibold flex items-center gap-1 transition-colors"
+                >
+                  Global Explorer <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
 
-            <div className="space-y-3">
-              {(timeline?.history && timeline.history.length > 0) ? (
-                timeline.history.map((h, idx) => (
-                  <div key={h.id || idx} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 text-xs flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{h.stage}</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                          {h.action}
-                        </span>
-                        {h.officer_name && (
-                          <span className="text-slate-500 text-[11px]">
-                            by <strong>{h.officer_name}</strong> ({h.officer_role || 'Officer'})
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-slate-700">{h.remarks || 'No remarks provided'}</p>
-                    </div>
-                    <span className="text-[11px] text-slate-400 whitespace-nowrap font-mono">
-                      {h.completed_at ? new Date(h.completed_at).toLocaleString() : h.entered_at ? new Date(h.entered_at).toLocaleString() : '—'}
-                    </span>
-                  </div>
-                ))
-              ) : application.stage_history && application.stage_history.length > 0 ? (
-                application.stage_history.map((h) => (
-                  <div key={h.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs flex items-start justify-between">
-                    <div>
-                      <div className="font-bold text-slate-900">{h.action_taken}</div>
-                      <p className="text-slate-600 mt-0.5">{h.remarks || 'No remarks provided'}</p>
-                    </div>
-                    <span className="text-[11px] text-slate-400 whitespace-nowrap">
-                      {new Date(h.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-lg">
-                  No stage transitions recorded yet.
+            {/* Filter Pills */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                { key: 'ALL', label: `All Events (${fullHistory?.total_events || 0})` },
+                {
+                  key: 'STAGE_TRANSITION',
+                  label: `Stage Transitions (${fullHistory?.events.filter((e) => e.category === 'STAGE_TRANSITION').length || 0})`,
+                },
+                {
+                  key: 'ALERT_ESCALATION',
+                  label: `Alerts & Escalations (${fullHistory?.events.filter((e) => e.category === 'ALERT' || e.category === 'ESCALATION').length || 0})`,
+                },
+                {
+                  key: 'SUBMISSION',
+                  label: `Submissions (${fullHistory?.events.filter((e) => e.category === 'SUBMISSION').length || 0})`,
+                },
+                {
+                  key: 'VERIFICATION',
+                  label: `Verifications (${fullHistory?.events.filter((e) => e.category === 'VERIFICATION').length || 0})`,
+                },
+                {
+                  key: 'AUDIT_BLOCK',
+                  label: `Audit Blocks (${fullHistory?.events.filter((e) => e.category === 'AUDIT_BLOCK').length || 0})`,
+                },
+              ].map((pill) => {
+                const isSelected = historyFilter === pill.key;
+                return (
+                  <button
+                    key={pill.key}
+                    onClick={() => setHistoryFilter(pill.key)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-[#0B2240] text-white shadow-2xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Events Stream Timeline */}
+            <div className="space-y-3 pt-2">
+              {historyLoading ? (
+                <LoadingState message="Reconstructing unified application event history..." />
+              ) : !fullHistory || fullHistory.events.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                  No chronological events recorded yet for this case.
                 </div>
+              ) : (
+                (() => {
+                  const filtered = fullHistory.events.filter((e) => {
+                    if (historyFilter === 'STAGE_TRANSITION') return e.category === 'STAGE_TRANSITION';
+                    if (historyFilter === 'ALERT_ESCALATION') return e.category === 'ALERT' || e.category === 'ESCALATION';
+                    if (historyFilter === 'SUBMISSION') return e.category === 'SUBMISSION';
+                    if (historyFilter === 'VERIFICATION') return e.category === 'VERIFICATION';
+                    if (historyFilter === 'AUDIT_BLOCK') return e.category === 'AUDIT_BLOCK';
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                        No events match the selected category filter "{historyFilter}".
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((ev) => {
+                    const isAudit = ev.category === 'AUDIT_BLOCK';
+                    const isEscalation = ev.category === 'ESCALATION';
+                    const isAlert = ev.category === 'ALERT';
+                    const isSubmission = ev.category === 'SUBMISSION';
+                    const isVerification = ev.category === 'VERIFICATION';
+
+                    let badgeStyle = 'bg-blue-50 text-blue-800 border-blue-200';
+                    if (ev.badge_color === 'emerald') badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+                    else if (ev.badge_color === 'red') badgeStyle = 'bg-rose-50 text-rose-800 border-rose-300';
+                    else if (ev.badge_color === 'amber') badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
+                    else if (ev.badge_color === 'purple') badgeStyle = 'bg-purple-50 text-purple-800 border-purple-300';
+                    else if (ev.badge_color === 'slate') badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
+
+                    return (
+                      <div
+                        key={ev.id}
+                        className={`p-4 rounded-xl border transition-all ${
+                          isEscalation
+                            ? 'bg-rose-50/40 border-rose-200'
+                            : isAlert
+                            ? 'bg-amber-50/40 border-amber-200'
+                            : isAudit
+                            ? 'bg-slate-50 border-slate-200'
+                            : 'bg-white border-slate-200 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border mt-0.5 ${
+                                isEscalation
+                                  ? 'bg-rose-100 border-rose-300 text-rose-700'
+                                  : isAlert
+                                  ? 'bg-amber-100 border-amber-300 text-amber-700'
+                                  : isVerification
+                                  ? 'bg-emerald-100 border-emerald-300 text-emerald-700'
+                                  : isSubmission
+                                  ? 'bg-blue-100 border-blue-300 text-blue-700'
+                                  : isAudit
+                                  ? 'bg-slate-200 border-slate-300 text-slate-700'
+                                  : 'bg-indigo-100 border-indigo-300 text-indigo-700'
+                              }`}
+                            >
+                              {isEscalation ? (
+                                <AlertTriangle className="w-4 h-4" />
+                              ) : isAlert ? (
+                                <Clock className="w-4 h-4" />
+                              ) : isVerification ? (
+                                <CheckSquare className="w-4 h-4" />
+                              ) : isSubmission ? (
+                                <Send className="w-4 h-4" />
+                              ) : isAudit ? (
+                                <Lock className="w-4 h-4" />
+                              ) : (
+                                <CheckCircle2 className="w-4 h-4" />
+                              )}
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                                  {ev.title}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border ${badgeStyle}`}
+                                >
+                                  {ev.action}
+                                </span>
+                                {ev.category && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-slate-100 text-slate-600">
+                                    {ev.category}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                <span>
+                                  Actor: <strong>{ev.actor_name}</strong>
+                                </span>
+                                <span>•</span>
+                                <span className="font-mono">{ev.actor_role}</span>
+                              </div>
+
+                              <p className="text-xs text-slate-700 leading-relaxed pt-0.5">
+                                {ev.details}
+                              </p>
+
+                              {/* Metadata Badges */}
+                              {ev.metadata && Object.keys(ev.metadata).length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-[10px]">
+                                  {ev.metadata.hash && (
+                                    <span
+                                      className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 truncate max-w-xs"
+                                      title={ev.metadata.hash}
+                                    >
+                                      Hash: {ev.metadata.hash.slice(0, 16)}...
+                                    </span>
+                                  )}
+                                  {ev.metadata.due_date && (
+                                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                      Due: {ev.metadata.due_date.split('T')[0]}
+                                    </span>
+                                  )}
+                                  {ev.metadata.level !== undefined && (
+                                    <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
+                                      Escalation Level {ev.metadata.level}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-slate-400 font-mono whitespace-nowrap self-start sm:self-auto pl-11 sm:pl-0">
+                            {ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
               )}
             </div>
           </div>

@@ -713,3 +713,62 @@ export interface EVCCommitteeMember {
   region_name: string;
   active_assignments: number;
 }
+
+export interface FullHistoryEvent {
+  id: string;
+  event_type: 'SUBMISSION' | 'STAGE_TRANSITION' | 'VERIFICATION' | 'ALERT' | 'ESCALATION' | 'AUDIT_BLOCK';
+  category: string;
+  title: string;
+  timestamp: string;
+  actor_name: string;
+  actor_role: string;
+  action: string;
+  details: string;
+  badge_color: string;
+  icon: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ApplicationFullHistoryResponse {
+  application_id: number;
+  ref_no: string;
+  institution_name: string;
+  current_stage: string;
+  status: string;
+  total_events: number;
+  events: FullHistoryEvent[];
+}
+
+export interface ReportSummaryKPI {
+  label: string;
+  value: string | number;
+  color?: string;
+}
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  type?: 'text' | 'mono' | 'badge' | 'status' | 'number' | 'date' | 'score' | 'percentage' | 'boolean';
+}
+
+export interface ReportMetadataItem {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  chart_type: 'bar' | 'pie' | 'composed';
+}
+
+export interface StatutoryReportData {
+  report_id: string;
+  title: string;
+  subtitle: string;
+  generated_at: string;
+  summary_kpis: ReportSummaryKPI[];
+  chart_type: 'bar' | 'pie' | 'composed';
+  chart_data: Array<Record<string, any>>;
+  chart_config: Record<string, any>;
+  table_columns: ReportColumn[];
+  table_data: Array<Record<string, any>>;
+}
+

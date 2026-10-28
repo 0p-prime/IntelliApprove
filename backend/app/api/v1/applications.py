@@ -290,3 +290,21 @@ def get_case_summary_endpoint(
     route, progression timeline, observations, and pending items, marked 'Draft for official review'.
     """
     return WorkflowService.generate_case_summary(db=db, application_id=application_id)
+
+
+@router.get("/{application_id}/full-history")
+def get_application_full_history_endpoint(
+    application_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns the comprehensive, unified chronological lifecycle history combining:
+    1. Stage transitions
+    2. Automated alerts
+    3. Multi-tier escalations
+    4. Submissions (initial app, undertakings proofs, renewals, rectifications)
+    5. Verifications (scrutiny, EVC report, undertaking checks, final authority orders)
+    6. Cryptographic audit trail blocks
+    """
+    return WorkflowService.get_application_full_history(db=db, application_id=application_id)

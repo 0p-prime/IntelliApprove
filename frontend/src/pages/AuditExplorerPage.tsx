@@ -25,8 +25,11 @@ export const AuditExplorerPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [actorFilter, setActorFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   // Cryptographic Verification State
@@ -40,8 +43,11 @@ export const AuditExplorerPage: React.FC = () => {
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.append('search', search.trim());
+      if (actorFilter.trim()) params.append('actor_email', actorFilter.trim());
       if (actionFilter) params.append('action', actionFilter);
       if (entityFilter) params.append('entity_type', entityFilter);
+      if (fromDate) params.append('from_date', fromDate);
+      if (toDate) params.append('to_date', toDate);
       params.append('limit', '100');
 
       const data = await apiRequest<AuditLog[]>(`/audit?${params.toString()}`);
@@ -63,6 +69,15 @@ export const AuditExplorerPage: React.FC = () => {
     } finally {
       setVerifying(false);
     }
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setActorFilter('');
+    setActionFilter('');
+    setEntityFilter('');
+    setFromDate('');
+    setToDate('');
   };
 
   const handleExportTrail = async () => {
@@ -88,8 +103,11 @@ export const AuditExplorerPage: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
+  }, [actionFilter, entityFilter, fromDate, toDate]);
+
+  useEffect(() => {
     handleVerifyChain();
-  }, [actionFilter, entityFilter]);
+  }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +131,25 @@ export const AuditExplorerPage: React.FC = () => {
             Immutable, append-only ledger linking every statutory decision, stage transition, document review, and
             investigation into a SHA-256 tamper-evident cryptographic hash chain.
           </p>
+          <div className="flex items-center gap-2 mt-2.5">
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide shadow-2xs ${
+                verification?.is_valid
+                  ? 'bg-emerald-500/20 border border-emerald-400 text-emerald-300'
+                  : 'bg-red-500/20 border border-red-400 text-red-300'
+              }`}
+            >
+              {verification?.is_valid ? (
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+              )}
+              Integrity: {verification?.is_valid ? 'Verified (SHA-256 Intact)' : 'Integrity Check Pending'}
+            </span>
+            <span className="text-[11px] text-blue-200 font-mono hidden sm:inline">
+              Genesis Anchor: 7c1c21e...
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
@@ -245,7 +282,7 @@ export const AuditExplorerPage: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search audit trail by actor email, entity ID, hash digest, or reason..."
+              placeholder="Search audit trail by general keywords, hash digest, or reason..."
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
             />
           </div>
@@ -257,13 +294,25 @@ export const AuditExplorerPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="flex gap-3 flex-wrap text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-slate-600">Entity:</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Actor Email / Role:</label>
+            <input
+              type="text"
+              value={actorFilter}
+              onChange={(e) => setActorFilter(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchLogs()}
+              placeholder="e.g. officer@aicte.gov.in"
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Target Entity:</label>
             <select
               value={entityFilter}
               onChange={(e) => setEntityFilter(e.target.value)}
-              className="p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs"
             >
               <option value="">All Entities</option>
               <option value="application">Application</option>
@@ -271,30 +320,66 @@ export const AuditExplorerPage: React.FC = () => {
               <option value="undertaking">Undertaking</option>
               <option value="evc">EVC / Committee</option>
               <option value="deficiency">Deficiency</option>
+              <option value="report">Report Generation</option>
               <option value="config">Configuration</option>
               <option value="user">User / Auth</option>
               <option value="escalation">Escalation</option>
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-slate-600">Action:</span>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Action Type:</label>
             <select
               value={actionFilter}
               onChange={(e) => setActionFilter(e.target.value)}
-              className="p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs"
             >
               <option value="">All Actions</option>
               <option value="APPLICATION_STAGE_TRANSITION">APPLICATION_STAGE_TRANSITION</option>
+              <option value="APPLICATION_RETURNED_FOR_RECTIFICATION">APPLICATION_RETURNED_FOR_RECTIFICATION</option>
               <option value="COMPLIANCE_EVALUATION_COMPLETED">COMPLIANCE_EVALUATION_COMPLETED</option>
               <option value="DEFICIENCY_RECTIFICATION_SUBMITTED">DEFICIENCY_RECTIFICATION_SUBMITTED</option>
               <option value="DOCUMENT_VERIFIED">DOCUMENT_VERIFIED</option>
               <option value="UNDERTAKING_VERIFIED">UNDERTAKING_VERIFIED</option>
               <option value="EVC_SCHEDULED">EVC_SCHEDULED</option>
+              <option value="REPORT_GENERATED">REPORT_GENERATED</option>
+              <option value="REPORT_EXPORTED_CSV">REPORT_EXPORTED_CSV</option>
               <option value="AUTOMATED_ESCALATION_TRIGGERED">AUTOMATED_ESCALATION_TRIGGERED</option>
               <option value="SYSTEM_CLOCK_ADVANCED">SYSTEM_CLOCK_ADVANCED</option>
               <option value="USER_LOGIN_SUCCESS">USER_LOGIN_SUCCESS</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">From Date (UTC):</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 mb-1">To Date (UTC):</label>
+            <div className="flex gap-1.5">
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs"
+              />
+              {(search || actorFilter || actionFilter || entityFilter || fromDate || toDate) && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded hover:bg-slate-100 cursor-pointer"
+                  title="Clear all filters"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -438,19 +523,76 @@ export const AuditExplorerPage: React.FC = () => {
               </div>
 
               {/* Before vs After Diffs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <span className="font-bold text-slate-700 block mb-1">State Before (old_value):</span>
-                  <pre className="p-3 bg-slate-100 rounded-lg font-mono text-[11px] overflow-x-auto text-slate-800 max-h-48 border border-slate-200">
-                    {selectedLog.old_value || 'null (Initial Creation)'}
-                  </pre>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-xs">
+                    State Change Diff (Before vs After Execution)
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Deterministic Canonical Serialized Payload
+                  </span>
                 </div>
 
-                <div>
-                  <span className="font-bold text-slate-700 block mb-1">State After (new_value):</span>
-                  <pre className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg font-mono text-[11px] overflow-x-auto text-emerald-900 max-h-48">
-                    {selectedLog.new_value || 'null (Terminal/Deletion)'}
-                  </pre>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-200/70">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-rose-800 text-[11px] flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                        State Before (old_value)
+                      </span>
+                      <span className="text-[10px] text-rose-600 font-mono">Pre-state snapshot</span>
+                    </div>
+                    {(() => {
+                      const v = selectedLog.old_value;
+                      if (!v || v === 'null' || v === 'None') {
+                        return <div className="p-3 bg-white/80 rounded-lg font-sans text-slate-400 italic text-xs">null (Initial Creation / No Prior State)</div>;
+                      }
+                      try {
+                        const parsed = JSON.parse(v);
+                        return (
+                          <pre className="p-3 bg-white/90 rounded-lg font-mono text-[11px] overflow-x-auto text-slate-800 max-h-56 border border-rose-200">
+                            {JSON.stringify(parsed, null, 2)}
+                          </pre>
+                        );
+                      } catch {
+                        return (
+                          <pre className="p-3 bg-white/90 rounded-lg font-mono text-[11px] overflow-x-auto text-slate-800 max-h-56 border border-rose-200 whitespace-pre-wrap break-all">
+                            {v}
+                          </pre>
+                        );
+                      }
+                    })()}
+                  </div>
+
+                  <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-200/70">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-emerald-800 text-[11px] flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        State After (new_value)
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-mono">Post-state snapshot</span>
+                    </div>
+                    {(() => {
+                      const v = selectedLog.new_value;
+                      if (!v || v === 'null' || v === 'None') {
+                        return <div className="p-3 bg-white/80 rounded-lg font-sans text-slate-400 italic text-xs">null (Terminal / Purged State)</div>;
+                      }
+                      try {
+                        const parsed = JSON.parse(v);
+                        return (
+                          <pre className="p-3 bg-white/90 rounded-lg font-mono text-[11px] overflow-x-auto text-emerald-950 max-h-56 border border-emerald-200">
+                            {JSON.stringify(parsed, null, 2)}
+                          </pre>
+                        );
+                      } catch {
+                        return (
+                          <pre className="p-3 bg-white/90 rounded-lg font-mono text-[11px] overflow-x-auto text-emerald-950 max-h-56 border border-emerald-200 whitespace-pre-wrap break-all">
+                            {v}
+                          </pre>
+                        );
+                      }
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>

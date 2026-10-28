@@ -13,6 +13,7 @@ import hashlib
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_
 from fastapi import HTTPException, status
 
 from app.models.entities import (
@@ -24,7 +25,11 @@ from app.models.entities import (
     User,
     UserRole,
     AuditLog,
-    Notification
+    Notification,
+    Escalation,
+    Undertaking,
+    Document,
+    DeficiencyRecord
 )
 from app.models.workflow import StageConfig, WorkflowRoute
 from app.services.audit_service import AuditService
@@ -346,6 +351,278 @@ class WorkflowService:
         return application
 
     @staticmethod
+    def get_application_full_history(db: Session, application_id: int) -> Dict[str, Any]:
+        """
+        Synthesizes a complete, unified chronological lifecycle history combining:
+        1. Stage History (transitions)
+        2. Automated Alerts & Reminders
+        3. Multi-tier Escalations
+        4. Submissions (initial app, undertaking evidence, renewals, deficiency proofs)
+        5. Verifications (scrutiny, EVC report, undertaking checks, final authority orders)
+        6. Cryptographic Audit Blocks
+        """
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        events: List[Dict[str, Any]] = []
+
+        # 1. Initial Submission
+        if app.submitted_at:
+            events.append({
+                "id": f"submit_{app.id}",
+                "event_type": "SUBMISSION",
+                "category": "SUBMISSION",
+                "title": f"Application Initial Submission ({app.application_type.replace('_', ' ')})",
+                "timestamp": app.submitted_at.isoformat(),
+                "actor_name": app.institution.name if app.institution else "Institution",
+                "actor_role": "INSTITUTION",
+                "action": "APPLICATION_SUBMITTED",
+                "details": f"Application filed under reference number {app.ref_no}. Workflow template ID: {app.workflow_template_id}.",
+                "badge_color": "blue",
+                "icon": "Send",
+                "metadata": {"ref_no": app.ref_no, "type": app.application_type}
+            })
+
+        # 2. Stage History
+        for h in app.stage_history:
+            t = h.completed_at or h.entered_at
+            if not t:
+                continue
+            is_decision = h.stage in ["APPROVED", "REJECTED", "APPROVED_WITH_CONDITIONS"]
+            is_return = "RETURNED" in (h.action or "").upper() or "REVERT" in (h.action or "").upper()
+            badge_col = "emerald" if is_decision and h.stage != "REJECTED" else "red" if is_return or h.stage == "REJECTED" else "indigo"
+
+            events.append({
+                "id": f"stage_{h.id}",
+                "event_type": "STAGE_TRANSITION",
+                "category": "STAGE_TRANSITION",
+                "title": f"Stage Transition: {h.stage.replace('_', ' ')}",
+                "timestamp": t.isoformat(),
+                "actor_name": h.officer.name if h.officer else "Workflow Automation Engine",
+                "actor_role": h.officer.role if h.officer else "SYSTEM",
+                "action": h.action or "STAGE_PROGRESSION",
+                "details": h.remarks or f"Progressed into stage {h.stage}.",
+                "badge_color": badge_col,
+                "icon": "CheckCircle2",
+                "metadata": {"stage": h.stage, "entered_at": h.entered_at.isoformat() if h.entered_at else None}
+            })
+
+        # 3. EVC Inspections (Scheduled, Rescheduled, Completed)
+        evc_schedules = db.query(EVCSchedule).filter(EVCSchedule.application_id == application_id).all()
+        for evc in evc_schedules:
+            if evc.scheduled_date:
+                events.append({
+                    "id": f"evc_sched_{evc.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Expert Visit Committee (EVC) Inspection Scheduled",
+                    "timestamp": evc.scheduled_date.isoformat(),
+                    "actor_name": "Regional Directorate",
+                    "actor_role": "REGIONAL_OFFICER",
+                    "action": "EVC_VISIT_SCHEDULED",
+                    "details": f"Physical campus inspection scheduled for {evc.scheduled_date.strftime('%d-%b-%Y')}. Statutory due date: {evc.due_date.strftime('%d-%b-%Y') if evc.due_date else 'TBD'}. New Campus: {bool(evc.is_new_institution)}.",
+                    "badge_color": "purple",
+                    "icon": "Users",
+                    "metadata": {"evc_id": evc.id, "due_date": evc.due_date.isoformat() if evc.due_date else None}
+                })
+            if evc.completed_at:
+                events.append({
+                    "id": f"evc_comp_{evc.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"EVC Inspection Completed & Report Submitted",
+                    "timestamp": evc.completed_at.isoformat(),
+                    "actor_name": "Expert Visit Committee",
+                    "actor_role": "EVC_MEMBER",
+                    "action": "EVC_REPORT_UPLOADED",
+                    "details": getattr(app, "evc_remarks", None) or "Physical inspection findings recorded and verified in committee report.",
+                    "badge_color": "emerald",
+                    "icon": "Award",
+                    "metadata": {"evc_id": evc.id, "completed_at": evc.completed_at.isoformat()}
+                })
+
+        # 4. Undertakings Submissions & Verifications
+        undertakings = db.query(Undertaking).filter(Undertaking.application_id == application_id).all()
+        for u in undertakings:
+            if u.evidence_file_id:
+                events.append({
+                    "id": f"und_sub_{u.id}",
+                    "event_type": "SUBMISSION",
+                    "category": "SUBMISSION",
+                    "title": f"Undertaking Compliance Evidence Uploaded (#{u.id})",
+                    "timestamp": (u.verified_at or app.stage_entered_at or app.submitted_at).isoformat(),
+                    "actor_name": app.institution.name if app.institution else "Institution",
+                    "actor_role": "INSTITUTION",
+                    "action": "UNDERTAKING_EVIDENCE_SUBMITTED",
+                    "details": f"Legal evidence uploaded for condition: '{u.condition_text}'. File ID: {u.evidence_file_id}.",
+                    "badge_color": "amber",
+                    "icon": "FileCheck2",
+                    "metadata": {"undertaking_id": u.id, "file_id": u.evidence_file_id}
+                })
+            if u.verified_at or u.status in ["VERIFIED", "REJECTED"]:
+                ver_t = u.verified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                is_ver = (u.status == "VERIFIED")
+                events.append({
+                    "id": f"und_ver_{u.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Undertaking Evidence {u.status} (#{u.id})",
+                    "timestamp": ver_t.isoformat(),
+                    "actor_name": u.verifier.name if getattr(u, 'verifier', None) else "Scrutiny Officer",
+                    "actor_role": u.verifier.role if getattr(u, 'verifier', None) else "REGIONAL_OFFICER",
+                    "action": f"UNDERTAKING_{u.status}",
+                    "details": u.remarks or f"Condition: {u.condition_text}",
+                    "badge_color": "emerald" if is_ver else "red",
+                    "icon": "CheckSquare" if is_ver else "XCircle",
+                    "metadata": {"undertaking_id": u.id, "status": u.status}
+                })
+
+        # 5. Deficiency Rectifications & Verifications
+        deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
+        for d in deficiencies:
+            if d.rectification_file_id or d.is_rectified:
+                rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    "id": f"def_rect_{d.id}",
+                    "event_type": "SUBMISSION",
+                    "category": "SUBMISSION",
+                    "title": f"Deficiency Rectification Submitted: {d.rule_code}",
+                    "timestamp": rect_t.isoformat(),
+                    "actor_name": app.institution.name if app.institution else "Institution",
+                    "actor_role": "INSTITUTION",
+                    "action": "DEFICIENCY_RECTIFICATION_SUBMITTED",
+                    "details": d.rectification_remarks or f"Rectification uploaded for norm rule {d.rule_code}.",
+                    "badge_color": "amber",
+                    "icon": "FileText",
+                    "metadata": {"rule_code": d.rule_code, "severity": d.severity}
+                })
+            if d.is_rectified and d.officer_remarks:
+                ver_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    "id": f"def_ver_{d.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Deficiency Cleared & Verified: {d.rule_code}",
+                    "timestamp": ver_t.isoformat(),
+                    "actor_name": "Regional Verification Committee",
+                    "actor_role": "REGIONAL_OFFICER",
+                    "action": "DEFICIENCY_VERIFIED_CLEAR",
+                    "details": d.officer_remarks,
+                    "badge_color": "emerald",
+                    "icon": "CheckCircle2",
+                    "metadata": {"rule_code": d.rule_code}
+                })
+
+        # 6. Automated Alerts & Notifications
+        notifs = db.query(Notification).filter(
+            or_(
+                Notification.title.ilike(f"%{app.ref_no}%"),
+                Notification.message.ilike(f"%{app.ref_no}%"),
+                Notification.link.ilike(f"%{app.id}%")
+            )
+        ).limit(25).all()
+
+        for n in notifs:
+            badge_col = "red" if n.severity in ["CRITICAL", "ESCALATION"] else "amber" if n.severity == "WARNING" else "blue"
+            events.append({
+                "id": f"notif_{n.id}",
+                "event_type": "ALERT",
+                "category": "ALERT",
+                "title": f"Automated Alert: {n.title}",
+                "timestamp": n.created_at.isoformat() if n.created_at else app.stage_entered_at.isoformat(),
+                "actor_name": "Autonomous Alert Engine",
+                "actor_role": "SYSTEM",
+                "action": f"ALERT_{n.severity}",
+                "details": n.message,
+                "badge_color": badge_col,
+                "icon": "AlertTriangle",
+                "metadata": {"category": n.category, "severity": n.severity}
+            })
+
+        # 7. Escalations
+        escalations = db.query(Escalation).filter(
+            or_(
+                and_(Escalation.entity_type == "APPLICATION", Escalation.entity_id == app.id),
+                and_(Escalation.entity_type == "EVC", Escalation.entity_id.in_([s.id for s in evc_schedules])) if evc_schedules else False,
+                and_(Escalation.entity_type == "UNDERTAKING", Escalation.entity_id.in_([u.id for u in undertakings])) if undertakings else False
+            )
+        ).all()
+
+        for e in escalations:
+            events.append({
+                "id": f"esc_{e.id}",
+                "event_type": "ESCALATION",
+                "category": "ESCALATION",
+                "title": f"SLA Timeout: Escalated to {e.escalated_to} (Level {e.level})",
+                "timestamp": e.created_at.isoformat() if e.created_at else app.stage_entered_at.isoformat(),
+                "actor_name": "Autonomous SLA Ladder",
+                "actor_role": "SYSTEM",
+                "action": f"ESCALATION_LEVEL_{e.level}",
+                "details": e.reason or f"Case overdue beyond statutory timeout window. Escalated to {e.escalated_to}.",
+                "badge_color": "red",
+                "icon": "AlertTriangle",
+                "metadata": {"level": e.level, "escalated_to": e.escalated_to}
+            })
+            if e.resolved_at:
+                events.append({
+                    "id": f"esc_res_{e.id}",
+                    "event_type": "ESCALATION",
+                    "category": "ESCALATION",
+                    "title": f"Level {e.level} Escalation Auto-Resolved",
+                    "timestamp": e.resolved_at.isoformat(),
+                    "actor_name": "Autonomous Alert Engine",
+                    "actor_role": "SYSTEM",
+                    "action": "ESCALATION_AUTO_RESOLVED",
+                    "details": f"Escalation successfully resolved following case progression and compliance fulfillment.",
+                    "badge_color": "emerald",
+                    "icon": "CheckCircle2",
+                    "metadata": {"level": e.level}
+                })
+
+        # 8. Cryptographic Audit Log Entries
+        audit_records = db.query(AuditLog).filter(
+            or_(
+                and_(AuditLog.entity_type.in_(["application", "app"]), AuditLog.entity_id == str(app.id)),
+                and_(AuditLog.entity_type == "evc", AuditLog.entity_id.in_([str(s.id) for s in evc_schedules])) if evc_schedules else False,
+                and_(AuditLog.entity_type == "undertaking", AuditLog.entity_id.in_([str(u.id) for u in undertakings])) if undertakings else False
+            )
+        ).limit(30).all()
+
+        for aud in audit_records:
+            events.append({
+                "id": f"audit_{aud.id}",
+                "event_type": "AUDIT_BLOCK",
+                "category": "AUDIT_BLOCK",
+                "title": f"Audit Block #{aud.id}: {aud.action}",
+                "timestamp": aud.timestamp.isoformat() if aud.timestamp else app.stage_entered_at.isoformat(),
+                "actor_name": aud.user_email or "SYSTEM",
+                "actor_role": aud.role or "SYSTEM",
+                "action": aud.action,
+                "details": aud.details or f"Action {aud.action} on {aud.entity_type} #{aud.entity_id}",
+                "badge_color": "slate",
+                "icon": "Lock",
+                "metadata": {
+                    "prev_hash": aud.prev_hash,
+                    "hash": aud.hash,
+                    "client_ip": aud.ip
+                }
+            })
+
+        # Sort chronologically (descending for recent-first)
+        events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        return {
+            "application_id": app.id,
+            "ref_no": app.ref_no,
+            "institution_name": app.institution.name if app.institution else "Unknown",
+            "current_stage": app.current_stage,
+            "status": app.status,
+            "total_events": len(events),
+            "events": events
+        }
+
+    @staticmethod
     def return_application(
         db: Session,
         application_id: int,
@@ -450,6 +727,278 @@ class WorkflowService:
         db.commit()
         db.refresh(application)
         return application
+
+    @staticmethod
+    def get_application_full_history(db: Session, application_id: int) -> Dict[str, Any]:
+        """
+        Synthesizes a complete, unified chronological lifecycle history combining:
+        1. Stage History (transitions)
+        2. Automated Alerts & Reminders
+        3. Multi-tier Escalations
+        4. Submissions (initial app, undertaking evidence, renewals, deficiency proofs)
+        5. Verifications (scrutiny, EVC report, undertaking checks, final authority orders)
+        6. Cryptographic Audit Blocks
+        """
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        events: List[Dict[str, Any]] = []
+
+        # 1. Initial Submission
+        if app.submitted_at:
+            events.append({
+                "id": f"submit_{app.id}",
+                "event_type": "SUBMISSION",
+                "category": "SUBMISSION",
+                "title": f"Application Initial Submission ({app.application_type.replace('_', ' ')})",
+                "timestamp": app.submitted_at.isoformat(),
+                "actor_name": app.institution.name if app.institution else "Institution",
+                "actor_role": "INSTITUTION",
+                "action": "APPLICATION_SUBMITTED",
+                "details": f"Application filed under reference number {app.ref_no}. Workflow template ID: {app.workflow_template_id}.",
+                "badge_color": "blue",
+                "icon": "Send",
+                "metadata": {"ref_no": app.ref_no, "type": app.application_type}
+            })
+
+        # 2. Stage History
+        for h in app.stage_history:
+            t = h.completed_at or h.entered_at
+            if not t:
+                continue
+            is_decision = h.stage in ["APPROVED", "REJECTED", "APPROVED_WITH_CONDITIONS"]
+            is_return = "RETURNED" in (h.action or "").upper() or "REVERT" in (h.action or "").upper()
+            badge_col = "emerald" if is_decision and h.stage != "REJECTED" else "red" if is_return or h.stage == "REJECTED" else "indigo"
+
+            events.append({
+                "id": f"stage_{h.id}",
+                "event_type": "STAGE_TRANSITION",
+                "category": "STAGE_TRANSITION",
+                "title": f"Stage Transition: {h.stage.replace('_', ' ')}",
+                "timestamp": t.isoformat(),
+                "actor_name": h.officer.name if h.officer else "Workflow Automation Engine",
+                "actor_role": h.officer.role if h.officer else "SYSTEM",
+                "action": h.action or "STAGE_PROGRESSION",
+                "details": h.remarks or f"Progressed into stage {h.stage}.",
+                "badge_color": badge_col,
+                "icon": "CheckCircle2",
+                "metadata": {"stage": h.stage, "entered_at": h.entered_at.isoformat() if h.entered_at else None}
+            })
+
+        # 3. EVC Inspections (Scheduled, Rescheduled, Completed)
+        evc_schedules = db.query(EVCSchedule).filter(EVCSchedule.application_id == application_id).all()
+        for evc in evc_schedules:
+            if evc.scheduled_date:
+                events.append({
+                    "id": f"evc_sched_{evc.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Expert Visit Committee (EVC) Inspection Scheduled",
+                    "timestamp": evc.scheduled_date.isoformat(),
+                    "actor_name": "Regional Directorate",
+                    "actor_role": "REGIONAL_OFFICER",
+                    "action": "EVC_VISIT_SCHEDULED",
+                    "details": f"Physical campus inspection scheduled for {evc.scheduled_date.strftime('%d-%b-%Y')}. Statutory due date: {evc.due_date.strftime('%d-%b-%Y') if evc.due_date else 'TBD'}. New Campus: {bool(evc.is_new_institution)}.",
+                    "badge_color": "purple",
+                    "icon": "Users",
+                    "metadata": {"evc_id": evc.id, "due_date": evc.due_date.isoformat() if evc.due_date else None}
+                })
+            if evc.completed_at:
+                events.append({
+                    "id": f"evc_comp_{evc.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"EVC Inspection Completed & Report Submitted",
+                    "timestamp": evc.completed_at.isoformat(),
+                    "actor_name": "Expert Visit Committee",
+                    "actor_role": "EVC_MEMBER",
+                    "action": "EVC_REPORT_UPLOADED",
+                    "details": getattr(app, "evc_remarks", None) or "Physical inspection findings recorded and verified in committee report.",
+                    "badge_color": "emerald",
+                    "icon": "Award",
+                    "metadata": {"evc_id": evc.id, "completed_at": evc.completed_at.isoformat()}
+                })
+
+        # 4. Undertakings Submissions & Verifications
+        undertakings = db.query(Undertaking).filter(Undertaking.application_id == application_id).all()
+        for u in undertakings:
+            if u.evidence_file_id:
+                events.append({
+                    "id": f"und_sub_{u.id}",
+                    "event_type": "SUBMISSION",
+                    "category": "SUBMISSION",
+                    "title": f"Undertaking Compliance Evidence Uploaded (#{u.id})",
+                    "timestamp": (u.verified_at or app.stage_entered_at or app.submitted_at).isoformat(),
+                    "actor_name": app.institution.name if app.institution else "Institution",
+                    "actor_role": "INSTITUTION",
+                    "action": "UNDERTAKING_EVIDENCE_SUBMITTED",
+                    "details": f"Legal evidence uploaded for condition: '{u.condition_text}'. File ID: {u.evidence_file_id}.",
+                    "badge_color": "amber",
+                    "icon": "FileCheck2",
+                    "metadata": {"undertaking_id": u.id, "file_id": u.evidence_file_id}
+                })
+            if u.verified_at or u.status in ["VERIFIED", "REJECTED"]:
+                ver_t = u.verified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                is_ver = (u.status == "VERIFIED")
+                events.append({
+                    "id": f"und_ver_{u.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Undertaking Evidence {u.status} (#{u.id})",
+                    "timestamp": ver_t.isoformat(),
+                    "actor_name": u.verifier.name if getattr(u, 'verifier', None) else "Scrutiny Officer",
+                    "actor_role": u.verifier.role if getattr(u, 'verifier', None) else "REGIONAL_OFFICER",
+                    "action": f"UNDERTAKING_{u.status}",
+                    "details": u.remarks or f"Condition: {u.condition_text}",
+                    "badge_color": "emerald" if is_ver else "red",
+                    "icon": "CheckSquare" if is_ver else "XCircle",
+                    "metadata": {"undertaking_id": u.id, "status": u.status}
+                })
+
+        # 5. Deficiency Rectifications & Verifications
+        deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
+        for d in deficiencies:
+            if d.rectification_file_id or d.is_rectified:
+                rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    "id": f"def_rect_{d.id}",
+                    "event_type": "SUBMISSION",
+                    "category": "SUBMISSION",
+                    "title": f"Deficiency Rectification Submitted: {d.rule_code}",
+                    "timestamp": rect_t.isoformat(),
+                    "actor_name": app.institution.name if app.institution else "Institution",
+                    "actor_role": "INSTITUTION",
+                    "action": "DEFICIENCY_RECTIFICATION_SUBMITTED",
+                    "details": d.rectification_remarks or f"Rectification uploaded for norm rule {d.rule_code}.",
+                    "badge_color": "amber",
+                    "icon": "FileText",
+                    "metadata": {"rule_code": d.rule_code, "severity": d.severity}
+                })
+            if d.is_rectified and d.officer_remarks:
+                ver_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    "id": f"def_ver_{d.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Deficiency Cleared & Verified: {d.rule_code}",
+                    "timestamp": ver_t.isoformat(),
+                    "actor_name": "Regional Verification Committee",
+                    "actor_role": "REGIONAL_OFFICER",
+                    "action": "DEFICIENCY_VERIFIED_CLEAR",
+                    "details": d.officer_remarks,
+                    "badge_color": "emerald",
+                    "icon": "CheckCircle2",
+                    "metadata": {"rule_code": d.rule_code}
+                })
+
+        # 6. Automated Alerts & Notifications
+        notifs = db.query(Notification).filter(
+            or_(
+                Notification.title.ilike(f"%{app.ref_no}%"),
+                Notification.message.ilike(f"%{app.ref_no}%"),
+                Notification.link.ilike(f"%{app.id}%")
+            )
+        ).limit(25).all()
+
+        for n in notifs:
+            badge_col = "red" if n.severity in ["CRITICAL", "ESCALATION"] else "amber" if n.severity == "WARNING" else "blue"
+            events.append({
+                "id": f"notif_{n.id}",
+                "event_type": "ALERT",
+                "category": "ALERT",
+                "title": f"Automated Alert: {n.title}",
+                "timestamp": n.created_at.isoformat() if n.created_at else app.stage_entered_at.isoformat(),
+                "actor_name": "Autonomous Alert Engine",
+                "actor_role": "SYSTEM",
+                "action": f"ALERT_{n.severity}",
+                "details": n.message,
+                "badge_color": badge_col,
+                "icon": "AlertTriangle",
+                "metadata": {"category": n.category, "severity": n.severity}
+            })
+
+        # 7. Escalations
+        escalations = db.query(Escalation).filter(
+            or_(
+                and_(Escalation.entity_type == "APPLICATION", Escalation.entity_id == app.id),
+                and_(Escalation.entity_type == "EVC", Escalation.entity_id.in_([s.id for s in evc_schedules])) if evc_schedules else False,
+                and_(Escalation.entity_type == "UNDERTAKING", Escalation.entity_id.in_([u.id for u in undertakings])) if undertakings else False
+            )
+        ).all()
+
+        for e in escalations:
+            events.append({
+                "id": f"esc_{e.id}",
+                "event_type": "ESCALATION",
+                "category": "ESCALATION",
+                "title": f"SLA Timeout: Escalated to {e.escalated_to} (Level {e.level})",
+                "timestamp": e.created_at.isoformat() if e.created_at else app.stage_entered_at.isoformat(),
+                "actor_name": "Autonomous SLA Ladder",
+                "actor_role": "SYSTEM",
+                "action": f"ESCALATION_LEVEL_{e.level}",
+                "details": e.reason or f"Case overdue beyond statutory timeout window. Escalated to {e.escalated_to}.",
+                "badge_color": "red",
+                "icon": "AlertTriangle",
+                "metadata": {"level": e.level, "escalated_to": e.escalated_to}
+            })
+            if e.resolved_at:
+                events.append({
+                    "id": f"esc_res_{e.id}",
+                    "event_type": "ESCALATION",
+                    "category": "ESCALATION",
+                    "title": f"Level {e.level} Escalation Auto-Resolved",
+                    "timestamp": e.resolved_at.isoformat(),
+                    "actor_name": "Autonomous Alert Engine",
+                    "actor_role": "SYSTEM",
+                    "action": "ESCALATION_AUTO_RESOLVED",
+                    "details": f"Escalation successfully resolved following case progression and compliance fulfillment.",
+                    "badge_color": "emerald",
+                    "icon": "CheckCircle2",
+                    "metadata": {"level": e.level}
+                })
+
+        # 8. Cryptographic Audit Log Entries
+        audit_records = db.query(AuditLog).filter(
+            or_(
+                and_(AuditLog.entity_type.in_(["application", "app"]), AuditLog.entity_id == str(app.id)),
+                and_(AuditLog.entity_type == "evc", AuditLog.entity_id.in_([str(s.id) for s in evc_schedules])) if evc_schedules else False,
+                and_(AuditLog.entity_type == "undertaking", AuditLog.entity_id.in_([str(u.id) for u in undertakings])) if undertakings else False
+            )
+        ).limit(30).all()
+
+        for aud in audit_records:
+            events.append({
+                "id": f"audit_{aud.id}",
+                "event_type": "AUDIT_BLOCK",
+                "category": "AUDIT_BLOCK",
+                "title": f"Audit Block #{aud.id}: {aud.action}",
+                "timestamp": aud.timestamp.isoformat() if aud.timestamp else app.stage_entered_at.isoformat(),
+                "actor_name": aud.user_email or "SYSTEM",
+                "actor_role": aud.role or "SYSTEM",
+                "action": aud.action,
+                "details": aud.details or f"Action {aud.action} on {aud.entity_type} #{aud.entity_id}",
+                "badge_color": "slate",
+                "icon": "Lock",
+                "metadata": {
+                    "prev_hash": aud.prev_hash,
+                    "hash": aud.hash,
+                    "client_ip": aud.ip
+                }
+            })
+
+        # Sort chronologically (descending for recent-first)
+        events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        return {
+            "application_id": app.id,
+            "ref_no": app.ref_no,
+            "institution_name": app.institution.name if app.institution else "Unknown",
+            "current_stage": app.current_stage,
+            "status": app.status,
+            "total_events": len(events),
+            "events": events
+        }
 
     @staticmethod
     def generate_case_summary(db: Session, application_id: int) -> Dict[str, Any]:
@@ -739,3 +1288,538 @@ class WorkflowService:
         db.commit()
         db.refresh(application)
         return application
+
+    @staticmethod
+    def get_application_full_history(db: Session, application_id: int) -> Dict[str, Any]:
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail='Application not found')
+
+        events: List[Dict[str, Any]] = []
+
+        # 1. Initial Submission
+        if app.submitted_at:
+            events.append({
+                'id': f'submit_{app.id}',
+                'event_type': 'SUBMISSION',
+                'category': 'SUBMISSION',
+                'title': f'Application Initial Submission ({app.application_type.replace("_", " ")})',
+                'timestamp': app.submitted_at.isoformat(),
+                'actor_name': app.institution.name if app.institution else 'Institution',
+                'actor_role': 'INSTITUTION',
+                'action': 'APPLICATION_SUBMITTED',
+                'details': f'Application filed under reference number {app.ref_no}. Workflow template ID: {app.workflow_template_id}.',
+                'badge_color': 'blue',
+                'icon': 'Send',
+                'metadata': {'ref_no': app.ref_no, 'type': app.application_type}
+            })
+
+        # 2. Stage History
+        for h in app.stage_history:
+            t = h.completed_at or h.entered_at
+            if not t:
+                continue
+            is_decision = h.stage in ['APPROVED', 'REJECTED', 'APPROVED_WITH_CONDITIONS']
+            is_return = 'RETURNED' in (h.action or '').upper() or 'REVERT' in (h.action or '').upper()
+            badge_col = 'emerald' if is_decision and h.stage != 'REJECTED' else 'red' if is_return or h.stage == 'REJECTED' else 'indigo'
+
+            events.append({
+                'id': f'stage_{h.id}',
+                'event_type': 'STAGE_TRANSITION',
+                'category': 'STAGE_TRANSITION',
+                'title': f'Stage Transition: {h.stage.replace("_", " ")}',
+                'timestamp': t.isoformat(),
+                'actor_name': h.officer.name if h.officer else 'Workflow Automation Engine',
+                'actor_role': h.officer.role if h.officer else 'SYSTEM',
+                'action': h.action or 'STAGE_PROGRESSION',
+                'details': h.remarks or f'Progressed into stage {h.stage}.',
+                'badge_color': badge_col,
+                'icon': 'CheckCircle2',
+                'metadata': {'stage': h.stage, 'entered_at': h.entered_at.isoformat() if h.entered_at else None}
+            })
+
+        # 3. EVC Inspections
+        evc_schedules = db.query(EVCSchedule).filter(EVCSchedule.application_id == application_id).all()
+        for evc in evc_schedules:
+            if evc.scheduled_date:
+                events.append({
+                    'id': f'evc_sched_{evc.id}',
+                    'event_type': 'VERIFICATION',
+                    'category': 'VERIFICATION',
+                    'title': 'Expert Visit Committee (EVC) Inspection Scheduled',
+                    'timestamp': evc.scheduled_date.isoformat(),
+                    'actor_name': 'Regional Directorate',
+                    'actor_role': 'REGIONAL_OFFICER',
+                    'action': 'EVC_VISIT_SCHEDULED',
+                    'details': f'Physical campus inspection scheduled for {evc.scheduled_date.strftime("%d-%b-%Y")}. Statutory due date: {evc.due_date.strftime("%d-%b-%Y") if evc.due_date else "TBD"}. New Campus: {bool(evc.is_new_institution)}.',
+                    'badge_color': 'purple',
+                    'icon': 'Users',
+                    'metadata': {'evc_id': evc.id, 'due_date': evc.due_date.isoformat() if evc.due_date else None}
+                })
+            if evc.completed_at:
+                events.append({
+                    'id': f'evc_comp_{evc.id}',
+                    'event_type': 'VERIFICATION',
+                    'category': 'VERIFICATION',
+                    'title': 'EVC Inspection Completed & Report Submitted',
+                    'timestamp': evc.completed_at.isoformat(),
+                    'actor_name': 'Expert Visit Committee',
+                    'actor_role': 'EVC_MEMBER',
+                    'action': 'EVC_REPORT_UPLOADED',
+                    'details': getattr(app, 'evc_remarks', None) or 'Physical inspection findings recorded and verified in committee report.',
+                    'badge_color': 'emerald',
+                    'icon': 'Award',
+                    'metadata': {'evc_id': evc.id, 'completed_at': evc.completed_at.isoformat()}
+                })
+
+        # 4. Undertakings Submissions & Verifications
+        undertakings = db.query(Undertaking).filter(Undertaking.application_id == application_id).all()
+        for u in undertakings:
+            if u.evidence_file_id:
+                events.append({
+                    'id': f'und_sub_{u.id}',
+                    'event_type': 'SUBMISSION',
+                    'category': 'SUBMISSION',
+                    'title': f'Undertaking Compliance Evidence Uploaded (#{u.id})',
+                    'timestamp': (u.verified_at or app.stage_entered_at or app.submitted_at).isoformat(),
+                    'actor_name': app.institution.name if app.institution else 'Institution',
+                    'actor_role': 'INSTITUTION',
+                    'action': 'UNDERTAKING_EVIDENCE_SUBMITTED',
+                    'details': f'Legal evidence uploaded for condition: "{u.condition_text}". File ID: {u.evidence_file_id}.',
+                    'badge_color': 'amber',
+                    'icon': 'FileCheck2',
+                    'metadata': {'undertaking_id': u.id, 'file_id': u.evidence_file_id}
+                })
+            if u.verified_at or u.status in ['VERIFIED', 'REJECTED']:
+                ver_t = u.verified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                is_ver = (u.status == 'VERIFIED')
+                events.append({
+                    'id': f'und_ver_{u.id}',
+                    'event_type': 'VERIFICATION',
+                    'category': 'VERIFICATION',
+                    'title': f'Undertaking Evidence {u.status} (#{u.id})',
+                    'timestamp': ver_t.isoformat(),
+                    'actor_name': u.verifier.name if getattr(u, "verifier", None) else 'Scrutiny Officer',
+                    'actor_role': u.verifier.role if getattr(u, "verifier", None) else 'REGIONAL_OFFICER',
+                    'action': f'UNDERTAKING_{u.status}',
+                    'details': u.remarks or f'Condition: {u.condition_text}',
+                    'badge_color': 'emerald' if is_ver else 'red',
+                    'icon': 'CheckSquare' if is_ver else 'XCircle',
+                    'metadata': {'undertaking_id': u.id, 'status': u.status}
+                })
+
+        # 5. Deficiency Rectifications & Verifications
+        deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
+        for d in deficiencies:
+            if d.rectification_proof or d.is_rectified:
+                rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    'id': f'def_rect_{d.id}',
+                    'event_type': 'SUBMISSION',
+                    'category': 'SUBMISSION',
+                    'title': f'Deficiency Rectification Submitted: {d.rule_code}',
+                    'timestamp': rect_t.isoformat(),
+                    'actor_name': app.institution.name if app.institution else 'Institution',
+                    'actor_role': 'INSTITUTION',
+                    'action': 'DEFICIENCY_RECTIFICATION_SUBMITTED',
+                    'details': d.rectification_remarks or f'Rectification uploaded for norm rule {d.rule_code}.',
+                    'badge_color': 'amber',
+                    'icon': 'FileText',
+                    'metadata': {'rule_code': d.rule_code, 'severity': d.severity}
+                })
+            if d.is_rectified and d.officer_remarks:
+                ver_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    'id': f'def_ver_{d.id}',
+                    'event_type': 'VERIFICATION',
+                    'category': 'VERIFICATION',
+                    'title': f'Deficiency Cleared & Verified: {d.rule_code}',
+                    'timestamp': ver_t.isoformat(),
+                    'actor_name': 'Regional Verification Committee',
+                    'actor_role': 'REGIONAL_OFFICER',
+                    'action': 'DEFICIENCY_VERIFIED_CLEAR',
+                    'details': d.officer_remarks,
+                    'badge_color': 'emerald',
+                    'icon': 'CheckCircle2',
+                    'metadata': {'rule_code': d.rule_code}
+                })
+
+        # 6. Automated Alerts & Notifications
+        notifs = db.query(Notification).filter(
+            or_(
+                Notification.title.ilike(f'%{app.ref_no}%'),
+                Notification.message.ilike(f'%{app.ref_no}%'),
+                Notification.link.ilike(f'%{app.id}%')
+            )
+        ).limit(25).all()
+
+        for n in notifs:
+            badge_col = 'red' if n.severity in ['CRITICAL', 'ESCALATION'] else 'amber' if n.severity == 'WARNING' else 'blue'
+            events.append({
+                'id': f'notif_{n.id}',
+                'event_type': 'ALERT',
+                'category': 'ALERT',
+                'title': f'Automated Alert: {n.title}',
+                'timestamp': n.created_at.isoformat() if n.created_at else app.stage_entered_at.isoformat(),
+                'actor_name': 'Autonomous Alert Engine',
+                'actor_role': 'SYSTEM',
+                'action': f'ALERT_{n.severity}',
+                'details': n.message,
+                'badge_color': badge_col,
+                'icon': 'AlertTriangle',
+                'metadata': {'category': n.category, 'severity': n.severity}
+            })
+
+        # 7. Escalations
+        escalations = db.query(Escalation).filter(
+            or_(
+                and_(Escalation.entity_type == 'APPLICATION', Escalation.entity_id == app.id),
+                and_(Escalation.entity_type == 'EVC', Escalation.entity_id.in_([s.id for s in evc_schedules])) if evc_schedules else False,
+                and_(Escalation.entity_type == 'UNDERTAKING', Escalation.entity_id.in_([u.id for u in undertakings])) if undertakings else False
+            )
+        ).all()
+
+        for e in escalations:
+            events.append({
+                'id': f'esc_{e.id}',
+                'event_type': 'ESCALATION',
+                'category': 'ESCALATION',
+                'title': f'SLA Timeout: Escalated to {e.escalated_to} (Level {e.level})',
+                'timestamp': e.created_at.isoformat() if e.created_at else app.stage_entered_at.isoformat(),
+                'actor_name': 'Autonomous SLA Ladder',
+                'actor_role': 'SYSTEM',
+                'action': f'ESCALATION_LEVEL_{e.level}',
+                'details': e.reason or f'Case overdue beyond statutory timeout window. Escalated to {e.escalated_to}.',
+                'badge_color': 'red',
+                'icon': 'AlertTriangle',
+                'metadata': {'level': e.level, 'escalated_to': e.escalated_to}
+            })
+            if e.resolved_at:
+                events.append({
+                    'id': f'esc_res_{e.id}',
+                    'event_type': 'ESCALATION',
+                    'category': 'ESCALATION',
+                    'title': f'Level {e.level} Escalation Auto-Resolved',
+                    'timestamp': e.resolved_at.isoformat(),
+                    'actor_name': 'Autonomous Alert Engine',
+                    'actor_role': 'SYSTEM',
+                    'action': 'ESCALATION_AUTO_RESOLVED',
+                    'details': 'Escalation successfully resolved following case progression and compliance fulfillment.',
+                    'badge_color': 'emerald',
+                    'icon': 'CheckCircle2',
+                    'metadata': {'level': e.level}
+                })
+
+        # 8. Cryptographic Audit Log Entries
+        audit_records = db.query(AuditLog).filter(
+            or_(
+                and_(AuditLog.entity_type.in_(['application', 'app']), AuditLog.entity_id == str(app.id)),
+                and_(AuditLog.entity_type == 'evc', AuditLog.entity_id.in_([str(s.id) for s in evc_schedules])) if evc_schedules else False,
+                and_(AuditLog.entity_type == 'undertaking', AuditLog.entity_id.in_([str(u.id) for u in undertakings])) if undertakings else False
+            )
+        ).limit(30).all()
+
+        for aud in audit_records:
+            events.append({
+                'id': f'audit_{aud.id}',
+                'event_type': 'AUDIT_BLOCK',
+                'category': 'AUDIT_BLOCK',
+                'title': f'Audit Block #{aud.id}: {aud.action}',
+                'timestamp': aud.timestamp.isoformat() if aud.timestamp else app.stage_entered_at.isoformat(),
+                'actor_name': aud.user_email or 'SYSTEM',
+                'actor_role': aud.role or 'SYSTEM',
+                'action': aud.action,
+                'details': aud.details or f'Action {aud.action} on {aud.entity_type} #{aud.entity_id}',
+                'badge_color': 'slate',
+                'icon': 'Lock',
+                'metadata': {
+                    'prev_hash': aud.prev_hash,
+                    'hash': aud.hash,
+                    'client_ip': aud.ip
+                }
+            })
+
+        # Sort chronologically (descending for recent-first)
+        events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+
+        return {
+            'application_id': app.id,
+            'ref_no': app.ref_no,
+            'institution_name': app.institution.name if app.institution else 'Unknown',
+            'current_stage': app.current_stage,
+            'status': app.status,
+            'total_events': len(events),
+            'events': events
+        }
+
+    @staticmethod
+    def get_application_full_history(db: Session, application_id: int) -> Dict[str, Any]:
+        """
+        Synthesizes a complete, unified chronological lifecycle history combining:
+        1. Stage History (transitions)
+        2. Automated Alerts & Reminders
+        3. Multi-tier Escalations
+        4. Submissions (initial app, undertaking evidence, renewals, deficiency proofs)
+        5. Verifications (scrutiny, EVC report, undertaking checks, final authority orders)
+        6. Cryptographic Audit Blocks
+        """
+        app = db.query(Application).filter(Application.id == application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        events: List[Dict[str, Any]] = []
+
+        # 1. Initial Submission
+        if app.submitted_at:
+            events.append({
+                "id": f"submit_{app.id}",
+                "event_type": "SUBMISSION",
+                "category": "SUBMISSION",
+                "title": f"Application Initial Submission ({app.application_type.replace('_', ' ')})",
+                "timestamp": app.submitted_at.isoformat(),
+                "actor_name": app.institution.name if app.institution else "Institution",
+                "actor_role": "INSTITUTION",
+                "action": "APPLICATION_SUBMITTED",
+                "details": f"Application filed under reference number {app.ref_no}. Workflow template ID: {app.workflow_template_id}.",
+                "badge_color": "blue",
+                "icon": "Send",
+                "metadata": {"ref_no": app.ref_no, "type": app.application_type}
+            })
+
+        # 2. Stage History
+        for h in app.stage_history:
+            t = h.completed_at or h.entered_at
+            if not t:
+                continue
+            is_decision = h.stage in ["APPROVED", "REJECTED", "APPROVED_WITH_CONDITIONS"]
+            is_return = "RETURNED" in (h.action or "").upper() or "REVERT" in (h.action or "").upper()
+            badge_col = "emerald" if is_decision and h.stage != "REJECTED" else "red" if is_return or h.stage == "REJECTED" else "indigo"
+
+            events.append({
+                "id": f"stage_{h.id}",
+                "event_type": "STAGE_TRANSITION",
+                "category": "STAGE_TRANSITION",
+                "title": f"Stage Transition: {h.stage.replace('_', ' ')}",
+                "timestamp": t.isoformat(),
+                "actor_name": h.officer.name if h.officer else "Workflow Automation Engine",
+                "actor_role": h.officer.role if h.officer else "SYSTEM",
+                "action": h.action or "STAGE_PROGRESSION",
+                "details": h.remarks or f"Progressed into stage {h.stage}.",
+                "badge_color": badge_col,
+                "icon": "CheckCircle2",
+                "metadata": {"stage": h.stage, "entered_at": h.entered_at.isoformat() if h.entered_at else None}
+            })
+
+        # 3. EVC Inspections (Scheduled, Rescheduled, Completed)
+        evc_schedules = db.query(EVCSchedule).filter(EVCSchedule.application_id == application_id).all()
+        for evc in evc_schedules:
+            if evc.scheduled_date:
+                events.append({
+                    "id": f"evc_sched_{evc.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Expert Visit Committee (EVC) Inspection Scheduled",
+                    "timestamp": evc.scheduled_date.isoformat(),
+                    "actor_name": "Regional Directorate",
+                    "actor_role": "REGIONAL_OFFICER",
+                    "action": "EVC_VISIT_SCHEDULED",
+                    "details": f"Physical campus inspection scheduled for {evc.scheduled_date.strftime('%d-%b-%Y')}. Statutory due date: {evc.due_date.strftime('%d-%b-%Y') if evc.due_date else 'TBD'}. New Campus: {bool(evc.is_new_institution)}.",
+                    "badge_color": "purple",
+                    "icon": "Users",
+                    "metadata": {"evc_id": evc.id, "due_date": evc.due_date.isoformat() if evc.due_date else None}
+                })
+            if evc.completed_at:
+                events.append({
+                    "id": f"evc_comp_{evc.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"EVC Inspection Completed & Report Submitted",
+                    "timestamp": evc.completed_at.isoformat(),
+                    "actor_name": "Expert Visit Committee",
+                    "actor_role": "EVC_MEMBER",
+                    "action": "EVC_REPORT_UPLOADED",
+                    "details": getattr(app, "evc_remarks", None) or "Physical inspection findings recorded and verified in committee report.",
+                    "badge_color": "emerald",
+                    "icon": "Award",
+                    "metadata": {"evc_id": evc.id, "completed_at": evc.completed_at.isoformat()}
+                })
+
+        # 4. Undertakings Submissions & Verifications
+        undertakings = db.query(Undertaking).filter(Undertaking.application_id == application_id).all()
+        for u in undertakings:
+            if u.evidence_file_id:
+                events.append({
+                    "id": f"und_sub_{u.id}",
+                    "event_type": "SUBMISSION",
+                    "category": "SUBMISSION",
+                    "title": f"Undertaking Compliance Evidence Uploaded (#{u.id})",
+                    "timestamp": (u.verified_at or app.stage_entered_at or app.submitted_at).isoformat(),
+                    "actor_name": app.institution.name if app.institution else "Institution",
+                    "actor_role": "INSTITUTION",
+                    "action": "UNDERTAKING_EVIDENCE_SUBMITTED",
+                    "details": f"Legal evidence uploaded for condition: '{u.condition_text}'. File ID: {u.evidence_file_id}.",
+                    "badge_color": "amber",
+                    "icon": "FileCheck2",
+                    "metadata": {"undertaking_id": u.id, "file_id": u.evidence_file_id}
+                })
+            if u.verified_at or u.status in ["VERIFIED", "REJECTED"]:
+                ver_t = u.verified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                is_ver = (u.status == "VERIFIED")
+                events.append({
+                    "id": f"und_ver_{u.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Undertaking Evidence {u.status} (#{u.id})",
+                    "timestamp": ver_t.isoformat(),
+                    "actor_name": u.verifier.name if getattr(u, 'verifier', None) else "Scrutiny Officer",
+                    "actor_role": u.verifier.role if getattr(u, 'verifier', None) else "REGIONAL_OFFICER",
+                    "action": f"UNDERTAKING_{u.status}",
+                    "details": u.remarks or f"Condition: {u.condition_text}",
+                    "badge_color": "emerald" if is_ver else "red",
+                    "icon": "CheckSquare" if is_ver else "XCircle",
+                    "metadata": {"undertaking_id": u.id, "status": u.status}
+                })
+
+        # 5. Deficiency Rectifications & Verifications
+        deficiencies = db.query(DeficiencyRecord).filter(DeficiencyRecord.application_id == application_id).all()
+        for d in deficiencies:
+            if d.rectification_file_id or d.is_rectified:
+                rect_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    "id": f"def_rect_{d.id}",
+                    "event_type": "SUBMISSION",
+                    "category": "SUBMISSION",
+                    "title": f"Deficiency Rectification Submitted: {d.rule_code}",
+                    "timestamp": rect_t.isoformat(),
+                    "actor_name": app.institution.name if app.institution else "Institution",
+                    "actor_role": "INSTITUTION",
+                    "action": "DEFICIENCY_RECTIFICATION_SUBMITTED",
+                    "details": d.rectification_remarks or f"Rectification uploaded for norm rule {d.rule_code}.",
+                    "badge_color": "amber",
+                    "icon": "FileText",
+                    "metadata": {"rule_code": d.rule_code, "severity": d.severity}
+                })
+            if d.is_rectified and d.officer_remarks:
+                ver_t = d.rectified_at or app.stage_entered_at or datetime.now(timezone.utc)
+                events.append({
+                    "id": f"def_ver_{d.id}",
+                    "event_type": "VERIFICATION",
+                    "category": "VERIFICATION",
+                    "title": f"Deficiency Cleared & Verified: {d.rule_code}",
+                    "timestamp": ver_t.isoformat(),
+                    "actor_name": "Regional Verification Committee",
+                    "actor_role": "REGIONAL_OFFICER",
+                    "action": "DEFICIENCY_VERIFIED_CLEAR",
+                    "details": d.officer_remarks,
+                    "badge_color": "emerald",
+                    "icon": "CheckCircle2",
+                    "metadata": {"rule_code": d.rule_code}
+                })
+
+        # 6. Automated Alerts & Notifications
+        notifs = db.query(Notification).filter(
+            or_(
+                Notification.title.ilike(f"%{app.ref_no}%"),
+                Notification.message.ilike(f"%{app.ref_no}%"),
+                Notification.link.ilike(f"%{app.id}%")
+            )
+        ).limit(25).all()
+
+        for n in notifs:
+            badge_col = "red" if n.severity in ["CRITICAL", "ESCALATION"] else "amber" if n.severity == "WARNING" else "blue"
+            events.append({
+                "id": f"notif_{n.id}",
+                "event_type": "ALERT",
+                "category": "ALERT",
+                "title": f"Automated Alert: {n.title}",
+                "timestamp": n.created_at.isoformat() if n.created_at else app.stage_entered_at.isoformat(),
+                "actor_name": "Autonomous Alert Engine",
+                "actor_role": "SYSTEM",
+                "action": f"ALERT_{n.severity}",
+                "details": n.message,
+                "badge_color": badge_col,
+                "icon": "AlertTriangle",
+                "metadata": {"category": n.category, "severity": n.severity}
+            })
+
+        # 7. Escalations
+        escalations = db.query(Escalation).filter(
+            or_(
+                and_(Escalation.entity_type == "APPLICATION", Escalation.entity_id == app.id),
+                and_(Escalation.entity_type == "EVC", Escalation.entity_id.in_([s.id for s in evc_schedules])) if evc_schedules else False,
+                and_(Escalation.entity_type == "UNDERTAKING", Escalation.entity_id.in_([u.id for u in undertakings])) if undertakings else False
+            )
+        ).all()
+
+        for e in escalations:
+            events.append({
+                "id": f"esc_{e.id}",
+                "event_type": "ESCALATION",
+                "category": "ESCALATION",
+                "title": f"SLA Timeout: Escalated to {e.escalated_to} (Level {e.level})",
+                "timestamp": e.created_at.isoformat() if e.created_at else app.stage_entered_at.isoformat(),
+                "actor_name": "Autonomous SLA Ladder",
+                "actor_role": "SYSTEM",
+                "action": f"ESCALATION_LEVEL_{e.level}",
+                "details": e.reason or f"Case overdue beyond statutory timeout window. Escalated to {e.escalated_to}.",
+                "badge_color": "red",
+                "icon": "AlertTriangle",
+                "metadata": {"level": e.level, "escalated_to": e.escalated_to}
+            })
+            if e.resolved_at:
+                events.append({
+                    "id": f"esc_res_{e.id}",
+                    "event_type": "ESCALATION",
+                    "category": "ESCALATION",
+                    "title": f"Level {e.level} Escalation Auto-Resolved",
+                    "timestamp": e.resolved_at.isoformat(),
+                    "actor_name": "Autonomous Alert Engine",
+                    "actor_role": "SYSTEM",
+                    "action": "ESCALATION_AUTO_RESOLVED",
+                    "details": f"Escalation successfully resolved following case progression and compliance fulfillment.",
+                    "badge_color": "emerald",
+                    "icon": "CheckCircle2",
+                    "metadata": {"level": e.level}
+                })
+
+        # 8. Cryptographic Audit Log Entries
+        audit_records = db.query(AuditLog).filter(
+            or_(
+                and_(AuditLog.entity_type.in_(["application", "app"]), AuditLog.entity_id == str(app.id)),
+                and_(AuditLog.entity_type == "evc", AuditLog.entity_id.in_([str(s.id) for s in evc_schedules])) if evc_schedules else False,
+                and_(AuditLog.entity_type == "undertaking", AuditLog.entity_id.in_([str(u.id) for u in undertakings])) if undertakings else False
+            )
+        ).limit(30).all()
+
+        for aud in audit_records:
+            events.append({
+                "id": f"audit_{aud.id}",
+                "event_type": "AUDIT_BLOCK",
+                "category": "AUDIT_BLOCK",
+                "title": f"Audit Block #{aud.id}: {aud.action}",
+                "timestamp": aud.timestamp.isoformat() if aud.timestamp else app.stage_entered_at.isoformat(),
+                "actor_name": aud.user_email or "SYSTEM",
+                "actor_role": aud.role or "SYSTEM",
+                "action": aud.action,
+                "details": aud.details or f"Action {aud.action} on {aud.entity_type} #{aud.entity_id}",
+                "badge_color": "slate",
+                "icon": "Lock",
+                "metadata": {
+                    "prev_hash": aud.prev_hash,
+                    "hash": aud.hash,
+                    "client_ip": aud.ip
+                }
+            })
+
+        # Sort chronologically (descending for recent-first)
+        events.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        return {
+            "application_id": app.id,
+            "ref_no": app.ref_no,
+            "institution_name": app.institution.name if app.institution else "Unknown",
+            "current_stage": app.current_stage,
+            "status": app.status,
+            "total_events": len(events),
+            "events": events
+        }
