@@ -338,3 +338,101 @@ export interface DashboardMetrics {
     created_at: string;
   }>;
 }
+
+export interface DashboardSummaryData {
+  summary: {
+    total: number;
+    in_progress: number;
+    returned: number;
+    completed: number;
+    approved: number;
+    rejected: number;
+    overdue: number;
+    sla_breach_count: number;
+    approaching_deadline_count: number;
+    average_risk_score: number;
+    timestamp: string;
+  };
+  top_overdue_cases: Array<{
+    id: number;
+    ref_no: string;
+    institution_name: string;
+    region_name: string;
+    current_stage: string;
+    status: string;
+    due_date?: string;
+    days_overdue: number;
+    assigned_officer_name: string;
+    risk_score: number;
+  }>;
+  role_context: Record<string, any>;
+  user_role: string;
+  jurisdiction: string;
+}
+
+export interface StageFunnelItem {
+  stage: string;
+  stage_name: string;
+  count: number;
+  percentage: number;
+  sla_hours: number;
+  color: string;
+}
+
+export interface AgeingItem {
+  bucket: string;
+  range: string;
+  count: number;
+  overdue_count: number;
+  percentage: number;
+  color: string;
+}
+
+export interface RegionPerformanceItem {
+  region_id: number;
+  region_name: string;
+  total_applications: number;
+  pendency: number;
+  overdue: number;
+  completed: number;
+  avg_processing_days: number;
+  sla_compliance_rate: number;
+  is_user_region: boolean;
+}
+
+export interface OfficerWorkloadItem {
+  officer_id: number;
+  officer_name: string;
+  officer_role: string;
+  region_name: string;
+  active_cases: number;
+  overdue_cases: number;
+  completed_cases: number;
+  utilization_pct: number;
+}
+
+export interface BottleneckItem {
+  stage: string;
+  stage_name: string;
+  avg_dwell_days: number;
+  sla_standard_days: number;
+  current_pending_cases: number;
+  bottleneck_severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  longest_dwell_days: number;
+  longest_dwell_ref: string;
+  longest_dwell_inst: string;
+}
+
+export interface UpcomingDeadlineItem {
+  id: string;
+  module: 'APPLICATION' | 'EVC' | 'UNDERTAKING' | 'DOCUMENT';
+  title: string;
+  ref_no: string;
+  institution_name: string;
+  region_name: string;
+  due_date: string;
+  days_remaining: number;
+  is_overdue: boolean;
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  link: string;
+}

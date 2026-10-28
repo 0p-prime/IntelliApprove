@@ -13,12 +13,14 @@ from app.api.v1 import (
     config,
     audit,
     analytics,
+    dashboard,
     institutions
 )
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Real-Time Dashboard"])
 api_router.include_router(applications.router, prefix="/applications", tags=["Applications"])
 api_router.include_router(workflow.router, prefix="/workflow", tags=["Workflow Execution"])
 api_router.include_router(compliance.router, prefix="/compliance", tags=["Compliance & Deficiencies"])

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Search,
   Filter,
@@ -29,15 +29,42 @@ export const ApplicationsListPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter States
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
-  const [selectedStage, setSelectedStage] = useState<string>('ALL');
-  const [selectedRegion, setSelectedRegion] = useState<string>('ALL');
-  const [selectedAge, setSelectedAge] = useState<string>('ALL');
-  const [institutionQuery, setInstitutionQuery] = useState<string>('');
-  const [escalatedOnly, setEscalatedOnly] = useState<boolean>(false);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
+  const [searchParams] = useSearchParams();
+
+  // Filter States initialized from URL params if present (supports click-throughs from Dashboard charts)
+  const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('search') || '');
+  const [selectedStatus, setSelectedStatus] = useState<string>(() => searchParams.get('status') || 'ALL');
+  const [selectedStage, setSelectedStage] = useState<string>(() => searchParams.get('stage') || 'ALL');
+  const [selectedRegion, setSelectedRegion] = useState<string>(() => searchParams.get('region') || 'ALL');
+  const [selectedAge, setSelectedAge] = useState<string>(() => {
+    const ageParam = searchParams.get('age');
+    if (ageParam === '0-7' || ageParam === 'UNDER_7') return 'UNDER_7';
+    if (ageParam === '8-15' || ageParam === '7_TO_14') return '7_TO_14';
+    if (ageParam === '16-30' || ageParam === '15_TO_30') return '15_TO_30';
+    if (ageParam === '30+' || ageParam === 'OVER_30') return 'OVER_30';
+    return 'ALL';
+  });
+  const [institutionQuery, setInstitutionQuery] = useState<string>(() => searchParams.get('institution') || '');
+  const [escalatedOnly, setEscalatedOnly] = useState<boolean>(() => searchParams.get('escalated_only') === 'true' || searchParams.get('overdue') === 'true');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(() => Boolean(searchParams.get('stage') || searchParams.get('region') || searchParams.get('age') || searchParams.get('status')));
+
+  // Synchronize state if URL query params change
+  useEffect(() => {
+    if (searchParams.get('status')) setSelectedStatus(searchParams.get('status')!);
+    if (searchParams.get('stage')) setSelectedStage(searchParams.get('stage')!);
+    if (searchParams.get('region')) setSelectedRegion(searchParams.get('region')!);
+    if (searchParams.get('institution')) setInstitutionQuery(searchParams.get('institution')!);
+    if (searchParams.get('escalated_only') === 'true' || searchParams.get('overdue') === 'true') {
+      setEscalatedOnly(true);
+    }
+    const ageParam = searchParams.get('age');
+    if (ageParam) {
+      if (ageParam === '0-7' || ageParam === 'UNDER_7') setSelectedAge('UNDER_7');
+      else if (ageParam === '8-15' || ageParam === '7_TO_14') setSelectedAge('7_TO_14');
+      else if (ageParam === '16-30' || ageParam === '15_TO_30') setSelectedAge('15_TO_30');
+      else if (ageParam === '30+' || ageParam === 'OVER_30') setSelectedAge('OVER_30');
+    }
+  }, [searchParams]);
 
   const fetchApplications = async () => {
     setLoading(true);
