@@ -74,10 +74,13 @@ python -m venv venv
 # On macOS/Linux:
 source venv/bin/activate
 
-# Install dependencies
+# Install dependencies (including Alembic)
 pip install -r requirements.txt email-validator
 
-# Run database seeder (initializes SQLite fallback with AICTE data)
+# Run database migrations with Alembic
+alembic upgrade head
+
+# Run database seeder (initializes 15 core tables with rich AICTE seed data)
 python -m app.seed
 
 # Run backend test suite
@@ -121,15 +124,56 @@ docker compose up --build
 
 ---
 
-## 6. Pre-Configured Demo Accounts (Role Switcher)
+## 6. Pre-Configured Demo Accounts (All Roles)
 
-Use the **"Persona Switcher"** in the top navigation bar to seamlessly test all roles:
+Default password for all demo accounts: **`aicte123`**
 
-| Role | Email | Password | Primary Functions |
+| Role | Email | Region / Scope | Primary Functions |
 | :--- | :--- | :--- | :--- |
-| **Competent Authority** | `member.secretary@aicte.gov.in` | `aicte123` | Complete Human Oversight Checklist, grant EoA approval or issue speaking orders |
-| **Scrutiny Officer** | `scrutiny.officer@aicte.gov.in` | `aicte123` | Verify legal documents, check affidavits, submit scrutiny report |
-| **EVC Inspector** | `evc.inspector@aicte.gov.in` | `aicte123` | Physical site verification, lab equipment inspection report |
-| **Regional Officer** | `ro.northern@aicte.gov.in` | `aicte123` | Monitor SLA escalations, verify post-approval compliance undertakings |
-| **Institution Admin** | `institute@ditm.ac.in` | `aicte123` | Submit EoA applications, review APH compliance score, rectify deficiencies |
-| **System Administrator** | `admin@aicte.gov.in` | `aicte123` | Configure workflow routes, edit stage SLA hours, manage escalation ladders |
+| **ADMIN** | `admin@aicte.gov.in` | National HQ | System administration, user & region management |
+| **ADMIN** | `system.admin@aicte.gov.in` | National HQ | Audit log inspection, security policy configuration |
+| **BUREAU_OFFICER** | `member.secretary@aicte.gov.in` | Approval Bureau | Human oversight decision panel, speaking orders, digital signatures |
+| **BUREAU_OFFICER** | `bureau.policy@aicte.gov.in` | Policy Bureau | Workflow template routing & high-level SLA escalations |
+| **REGIONAL_HEAD** | `head.nw@aicte.gov.in` | North-Western | Regional oversight, Level-2 SLA escalations, committee appointments |
+| **REGIONAL_HEAD** | `head.w@aicte.gov.in` | Western | Western region oversight (Mumbai / Pune) |
+| **REGIONAL_HEAD** | `head.sw@aicte.gov.in` | South-Western | South-Western region oversight (Bengaluru / Kerala) |
+| **REGIONAL_OFFICER** | `ro.nw@aicte.gov.in` | North-Western | Scrutiny review, undertaking tracking, Level-1 escalations |
+| **REGIONAL_OFFICER** | `ro.w@aicte.gov.in` | Western | Scrutiny evaluation & compliance verification |
+| **REGIONAL_OFFICER** | `ro.s@aicte.gov.in` | Southern | Scrutiny evaluation & document verification |
+| **EVC_MEMBER** | `evc.expert1@aicte.gov.in` | Eastern | Expert Visit Committee physical & virtual inspections |
+| **EVC_MEMBER** | `evc.expert2@aicte.gov.in` | South-Western | Infrastructure, laboratory and faculty verification |
+| **INSTITUTION** | `principal@ditm.ac.in` | Delhi (NW) | Submit EoA applications, upload deeds, track approvals |
+| **INSTITUTION** | `director@mcer.edu.in` | Maharashtra (W) | Manage undertakings, rectify document shortfalls |
+
+---
+
+## 7. Database Architecture & Seed Dataset
+
+IntelliApprove implements a 15-table architecture managed via **SQLAlchemy + Alembic migrations**:
+
+### Database Tables (15 Core Tables)
+1. **`users`**: User identity, role-based access (`INSTITUTION`, `REGIONAL_OFFICER`, `REGIONAL_HEAD`, `BUREAU_OFFICER`, `EVC_MEMBER`, `ADMIN`), regional jurisdiction, salted password hashes.
+2. **`regions`**: 8 official AICTE regions (Northern, Southern, Western, Eastern, Central, South-Western, North-Western, South-Central).
+3. **`institutions`**: 60 AICTE-approved institutions across Indian states, mapped to regions and institution categories (Engineering, Management, Pharmacy, Architecture, Polytechnic).
+4. **`applications`**: 150 applications spanning lifecycle stages (`SUBMITTED`, `SCRUTINY`, `EVC`, `SAC_SHC`, `BUREAU_DECISION`, `APPROVED`, `REJECTED`, `DEFICIENT`), assigned officers, risk scores, and due dates (overdue, near-deadline, healthy).
+5. **`workflow_templates`**: Configurable route definitions ("Only Scrutiny", "Scrutiny + EVC", "EVC + SAC/SHC", "Only EVC", "Scrutiny + EVC + SAC/SHC") stored as JSON stages and transitions.
+6. **`stage_history`**: Granular immutable state transitions for each application with timestamps, acting officers, and remarks.
+7. **`evc_schedules`**: 25 Expert Visit Committee inspection schedules (upcoming, due soon, overdue, completed) with committee member IDs and new-institution flags.
+8. **`undertakings`**: 40 post-approval compliance commitments (pending, due soon, overdue, verified) tied to legal conditions and verification proofs.
+9. **`documents`**: 60 institutional documents (leases, building plans, fire NOCs, audited accounts) with lease expiry dates spread from -30 to +365 days.
+10. **`files`**: Static evidence file registry with SHA-256 digital fingerprinting.
+11. **`alert_rules`**: Automated alert policies (T-7, T-3, T-1, overdue; lease warnings at 90/60/30/7 days; multi-tier escalation ladders).
+12. **`notifications`**: Targeted user alerts with severities (`INFO`, `WARNING`, `CRITICAL`, `ESCALATION`).
+13. **`escalations`**: Automated multi-tier escalation records (Level 1: Regional Officer -> Level 2: Regional Head -> Level 3: Bureau Officer).
+14. **`audit_logs`**: Append-only cryptographic audit trail linking every event in a SHA-256 hash chain (`prev_hash` -> `hash`).
+15. **`system_clock`**: Simulated date controller for time-travel demonstrations during evaluations.
+
+### Database Operations
+- **Run Alembic Migrations**:
+  ```bash
+  alembic upgrade head
+  ```
+- **Run Seed Script & Print Verification Counts**:
+  ```bash
+  python backend/app/seed.py
+  ```

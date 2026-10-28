@@ -1,13 +1,16 @@
 """
 Audit Service: Centralized execution of Non-Negotiable Rule #1.
-Guarantees every state change writes an audit_logs record with complete actor context.
+Guarantees every state change writes an audit_logs record with cryptographic hash chain.
 """
 import json
+import hashlib
 from typing import Optional, Any
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from app.models.audit import AuditLog
-from app.models.user import User
+from app.models.entities import AuditLog
+from app.models.entities import User
+
+GENESIS_HASH = hashlib.sha256("INTELLIAPPROVE_AICTE_GENESIS_STATE_2026".encode("utf-8")).hexdigest()
 
 class AuditService:
     @staticmethod
@@ -25,7 +28,7 @@ class AuditService:
     ) -> AuditLog:
         """
         Record an immutable audit entry in the database.
-        Can be called with user context or automated system worker context.
+        Maintains a cryptographic SHA-256 tamper-evident hash chain.
         """
         def serialize(val: Any) -> Optional[str]:
             if val is None:
@@ -38,21 +41,27 @@ class AuditService:
             return str(val)
 
         user_id = user.id if user else None
-        user_email = user.email if user else (system_actor_name or "SYSTEM_SCHEDULER")
-        role = user.role if user else "SYSTEM"
+        
+        # Calculate prev_hash
+        last_log = db.query(AuditLog).order_by(AuditLog.id.desc()).first()
+        prev_hash = last_log.hash if last_log and last_log.hash else GENESIS_HASH
+
+        now_ts = datetime.now(timezone.utc)
+        payload = f"{prev_hash}|{user_id}|{action}|{entity_type}|{entity_id}|{now_ts.isoformat()}"
+        curr_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
         audit_entry = AuditLog(
-            timestamp=datetime.now(timezone.utc),
-            user_id=user_id,
-            user_email=user_email,
-            role=role,
+            actor_id=user_id,
             action=action,
             entity_type=entity_type,
             entity_id=str(entity_id),
-            old_value=serialize(old_value),
-            new_value=serialize(new_value),
-            details=details,
-            ip_address=ip_address
+            old_value_json=serialize(old_value),
+            new_value_json=serialize(new_value),
+            reason=details,
+            ip=ip_address,
+            timestamp=now_ts,
+            prev_hash=prev_hash,
+            hash=curr_hash
         )
         
         db.add(audit_entry)

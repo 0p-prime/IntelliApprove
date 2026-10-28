@@ -1,32 +1,43 @@
 """
-Package export for all database models.
+Database models export for IntelliApprove.
+Exposes the 15 core tables matching the AICTE approval workflow specification.
 """
 from app.core.database import Base
-from app.models.user import User, UserRole
-from app.models.institution import Institution
-from app.models.workflow import StageConfig, WorkflowRoute, EscalationLadder
-from app.models.application import Application, AcademicProgram, ApplicationDocument, ApplicationStageHistory
-from app.models.compliance import ComplianceNormRule, DeficiencyRecord
-from app.models.undertaking import Undertaking
-from app.models.alert import Alert, EscalationEvent
-from app.models.audit import AuditLog
+from app.models.entities import (
+    UserRole,
+    Region,
+    User,
+    Institution,
+    WorkflowTemplate,
+    Application,
+    StageHistory,
+    EVCSchedule,
+    FileRecord,
+    Undertaking,
+    Document,
+    AlertRule,
+    Notification,
+    Escalation,
+    AuditLog,
+    SystemClock,
+)
 
 __all__ = [
     "Base",
-    "User",
     "UserRole",
+    "Region",
+    "User",
     "Institution",
-    "StageConfig",
-    "WorkflowRoute",
-    "EscalationLadder",
+    "WorkflowTemplate",
     "Application",
-    "AcademicProgram",
-    "ApplicationDocument",
-    "ApplicationStageHistory",
-    "ComplianceNormRule",
-    "DeficiencyRecord",
+    "StageHistory",
+    "EVCSchedule",
+    "FileRecord",
     "Undertaking",
-    "Alert",
-    "EscalationEvent",
-    "AuditLog"
+    "Document",
+    "AlertRule",
+    "Notification",
+    "Escalation",
+    "AuditLog",
+    "SystemClock",
 ]

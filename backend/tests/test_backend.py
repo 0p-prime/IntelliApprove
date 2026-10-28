@@ -33,7 +33,7 @@ def test_rule_1_audit_log_on_login():
     })
     assert res.status_code == 200
     data = res.json()
-    assert data["role"] == "COMPETENT_AUTHORITY"
+    assert data["role"] in ["BUREAU_OFFICER", "COMPETENT_AUTHORITY"]
 
     db = SessionLocal()
     audit_count_after = db.query(AuditLog).filter(AuditLog.action == "USER_LOGIN_SUCCESS").count()

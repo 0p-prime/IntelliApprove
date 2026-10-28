@@ -4,7 +4,11 @@ Supports PostgreSQL with SQLite fallback via environment variables.
 """
 from pydantic_settings import BaseSettings
 from typing import List
+from pathlib import Path
 import os
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_DB_PATH = (BASE_DIR / "intelliapprove.db").as_posix()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "IntelliApprove AICTE Approval Platform"
@@ -17,7 +21,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
     # Database: Default SQLite fallback for local demo, override with DATABASE_URL for Postgres
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./intelliapprove.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [
