@@ -37,19 +37,63 @@ def get_allowed_workflow_actions(
     Returns the dynamically allowed next transitions based on current stage and user's role.
     Adheres strictly to Rule #3 (configurable database routes).
     """
+    import json
     application = db.query(Application).filter(Application.id == application_id).first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    routes_query = db.query(WorkflowRoute).filter(
-        WorkflowRoute.from_stage_id == application.current_stage_id,
-        WorkflowRoute.is_active == True
-    )
+    template = application.workflow_template
+    if not template or not template.transitions_json:
+        return []
 
-    if current_user.role != UserRole.ADMIN.value:
-        routes_query = routes_query.filter(WorkflowRoute.required_role == current_user.role)
+    try:
+        transitions = json.loads(template.transitions_json)
+    except Exception:
+        return []
 
-    return routes_query.all()
+    current_stage = application.current_stage
+    results = []
+    STAGE_ROLE_MAP = {
+        "SUBMITTED": "REGIONAL_OFFICER",
+        "SCRUTINY": "REGIONAL_OFFICER",
+        "DEFICIENT": "INSTITUTION",
+        "EVC": "EVC_MEMBER",
+        "SAC_SHC": "REGIONAL_HEAD",
+        "BUREAU_DECISION": "BUREAU_OFFICER",
+        "APPROVED": "BUREAU_OFFICER",
+        "REJECTED": "BUREAU_OFFICER",
+    }
+
+    user_role_str = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+
+    for idx, t in enumerate(transitions):
+        from_st = t.get("from")
+        to_st = t.get("to")
+        action = t.get("action", f"Transition to {to_st}")
+        if from_st == current_stage:
+            req_role = STAGE_ROLE_MAP.get(from_st, "REGIONAL_OFFICER")
+            is_human = to_st in ("APPROVED", "REJECTED") or from_st == "BUREAU_DECISION"
+
+            if (
+                user_role_str == "ADMIN"
+                or user_role_str == req_role
+                or (user_role_str == "BUREAU_OFFICER" and req_role in ("BUREAU_OFFICER", "REGIONAL_HEAD"))
+                or (user_role_str == "REGIONAL_HEAD" and req_role in ("REGIONAL_HEAD", "REGIONAL_OFFICER"))
+            ):
+                results.append(
+                    WorkflowRouteOut(
+                        id=idx + 1,
+                        from_stage_id=idx,
+                        to_stage_id=idx + 1,
+                        action_name=action,
+                        required_role=req_role,
+                        requires_human_badge=is_human,
+                        description=f"Advance from {from_st} to {to_st}",
+                        is_active=True
+                    )
+                )
+
+    return results
 
 @router.post("/transition", response_model=ApplicationDetailOut)
 def transition_application_stage(

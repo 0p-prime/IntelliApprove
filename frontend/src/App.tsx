@@ -20,7 +20,10 @@ import { EscalationLadderPage } from './pages/EscalationLadderPage';
 import { ComplianceRulesPage } from './pages/ComplianceRulesPage';
 import { IntegrationPage } from './pages/IntegrationPage';
 import { AIAssistantWidget } from './components/AIAssistantWidget';
+import { DemoBanner } from './components/DemoBanner';
+import { GuidedTourModal } from './components/GuidedTourModal';
 import { LanguageProvider } from './context/LanguageContext';
+import { ToastProvider } from './context/ToastContext';
 import { LoadingState } from './components/States';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({
@@ -62,6 +65,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
 const AppShell: React.FC = () => {
   const { user, isAuthenticated, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const location = useLocation();
 
   if (loading) {
@@ -88,6 +92,7 @@ const AppShell: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
       <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <DemoBanner onOpenTour={() => setTourOpen(true)} />
 
       <div className="flex-1 flex w-full">
         {/* Role-based App Shell Sidebar */}
@@ -236,6 +241,9 @@ const AppShell: React.FC = () => {
 
       {/* Role-Scoped AI Statutory Query & Drafting Assistant */}
       <AIAssistantWidget />
+
+      {/* Guided Tour Modal */}
+      <GuidedTourModal isOpen={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
   );
 };
@@ -244,9 +252,11 @@ export function App() {
   return (
     <AuthProvider>
       <LanguageProvider>
-        <BrowserRouter>
-          <AppShell />
-        </BrowserRouter>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppShell />
+          </BrowserRouter>
+        </ToastProvider>
       </LanguageProvider>
     </AuthProvider>
   );
