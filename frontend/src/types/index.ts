@@ -29,6 +29,7 @@ export interface Institution {
   category: string;
   state: string;
   region: string;
+  district?: string;
   address: string;
   established_year: number;
   trust_society_name: string;
