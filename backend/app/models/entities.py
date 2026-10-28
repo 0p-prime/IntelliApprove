@@ -351,6 +351,7 @@ class Undertaking(Base):
     evidence_file_id = Column(Integer, ForeignKey("files.id", ondelete="SET NULL"), nullable=True)
     verified_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     verified_at = Column(DateTime, nullable=True)
+    remarks = Column(Text, nullable=True)
     
     # Relationships
     institution = relationship("Institution", back_populates="undertakings")
@@ -380,7 +381,7 @@ class Undertaking(Base):
 
     @property
     def verification_remarks(self) -> Optional[str]:
-        return "Verified by regional officer" if self.status == "VERIFIED" else None
+        return self.remarks or ("Verified by regional officer" if self.status == "VERIFIED" else None)
 
     @property
     def verified_by_user_id(self):

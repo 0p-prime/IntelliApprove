@@ -13,6 +13,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.applications import router as applications_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.evc import router as evc_router
+from app.api.v1.undertakings import router as undertakings_router
 from app.services.scheduler_service import start_scheduler, shutdown_scheduler
 from app.seed import seed_database
 
@@ -52,6 +53,7 @@ app.include_router(auth_router, prefix="/auth", tags=["Auth Direct"])
 app.include_router(applications_router, prefix="/applications", tags=["Applications Direct"])
 app.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard Direct"])
 app.include_router(evc_router, prefix="/evc", tags=["EVC Direct"])
+app.include_router(undertakings_router, prefix="/undertakings", tags=["Undertakings Direct"])
 
 @app.get("/")
 def root():

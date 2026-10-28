@@ -147,18 +147,80 @@ export interface DeficiencyRecord {
 
 export interface Undertaking {
   id: number;
+  institution_id?: number;
+  institution_name?: string;
+  institution_type?: string;
+  state?: string;
+  region_id?: number;
+  region_name?: string;
   application_id: number;
+  application_ref_no?: string;
+  condition_text?: string;
   title: string;
   description: string;
   category: string;
   due_date: string;
-  status: 'PENDING' | 'SUBMITTED_FOR_REVIEW' | 'COMPLIANT' | 'BREACHED';
+  status: 'PENDING' | 'SUBMITTED' | 'SUBMITTED_FOR_REVIEW' | 'VERIFIED' | 'COMPLIANT' | 'REJECTED' | 'OVERDUE' | 'BREACHED';
+  raw_status?: string;
+  days_remaining?: number;
+  days_overdue?: number;
+  is_overdue?: boolean;
+  evidence_file_id?: number;
+  evidence_filename?: string;
+  evidence_file_hash?: string;
+  evidence_file_url?: string;
   submission_evidence?: string;
   submitted_at?: string;
   verified_by_user_id?: number;
+  verifier_name?: string;
   verified_at?: string;
+  remarks?: string;
   verification_remarks?: string;
-  created_at: string;
+  created_at?: string;
+}
+
+export interface ComplianceScoreItem {
+  institution_id: number;
+  institution_name: string;
+  institution_type: string;
+  state: string;
+  region_id: number;
+  region_name: string;
+  total_undertakings: number;
+  verified_on_time: number;
+  verified_late: number;
+  submitted_pending_review: number;
+  pending_active: number;
+  overdue_breached: number;
+  rejected_deficiencies: number;
+  compliance_score: number;
+  grade: 'EXCELLENT' | 'MODERATE' | 'CRITICAL';
+  color: string;
+}
+
+export interface RegionComplianceSummary {
+  region_id: number;
+  region_name: string;
+  institutions_count: number;
+  total_undertakings: number;
+  verified_on_time: number;
+  overdue_count: number;
+  avg_compliance_score: number;
+  grade: 'EXCELLENT' | 'MODERATE' | 'CRITICAL';
+  color: string;
+}
+
+export interface ComplianceHeatTableData {
+  summary: {
+    total_institutions: number;
+    total_undertakings: number;
+    verified_on_time: number;
+    overdue_count: number;
+    national_average_score: number;
+    grade: 'EXCELLENT' | 'MODERATE' | 'CRITICAL';
+  };
+  regional_breakdown: RegionComplianceSummary[];
+  institutions: ComplianceScoreItem[];
 }
 
 export interface ApplicationStageHistory {
