@@ -67,6 +67,8 @@ export interface StageConfig {
   is_active: boolean;
 }
 
+export type WorkflowStage = StageConfig;
+
 export interface WorkflowRoute {
   id: number;
   from_stage_id: number;
@@ -79,6 +81,8 @@ export interface WorkflowRoute {
   from_stage?: StageConfig;
   to_stage?: StageConfig;
 }
+
+export type WorkflowRouteTransition = WorkflowRoute;
 
 export interface EscalationLadder {
   id: number;

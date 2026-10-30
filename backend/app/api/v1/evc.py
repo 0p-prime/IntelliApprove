@@ -229,82 +229,168 @@ def format_evc_schedule(s: EVCSchedule, now: datetime, db: Session) -> Dict[str,
 # --- Request Schemas ---
 
 class ScheduleEVCRequest(BaseModel):
-    scheduled_date: datetime = Field(..., description="Date and time of physical inspection")
-    committee_ids: List[int] = Field(..., min_items=1, description="List of user IDs for assigned committee members")
+    date: Optional[datetime] = Field(None, description="Date and time of physical inspection")
+    scheduled_date: Optional[datetime] = Field(None, description="Date and time of physical inspection")
+    committee_member_ids: Optional[List[int]] = Field(None, description="List of user IDs for assigned committee members")
+    committee_ids: Optional[List[int]] = Field(None, description="List of user IDs for assigned committee members")
+    notes: Optional[str] = Field(None, description="Optional scheduling remarks or notes")
 
 
 class RescheduleEVCRequest(BaseModel):
-    scheduled_date: datetime = Field(..., description="New rescheduled inspection date")
-    reason: str = Field(..., min_length=5, description="Mandatory reason for rescheduling visit")
+    new_date: Optional[datetime] = Field(None, description="New rescheduled inspection date")
+    date: Optional[datetime] = Field(None, description="New rescheduled inspection date")
+    scheduled_date: Optional[datetime] = Field(None, description="New rescheduled inspection date")
+    reason: str = Field(..., min_length=1, description="Mandatory reason for rescheduling visit")
+    committee_member_ids: Optional[List[int]] = None
     committee_ids: Optional[List[int]] = None
+    notes: Optional[str] = None
 
 
 class CompleteEVCRequest(BaseModel):
-    report_summary: str = Field(..., min_length=10, description="Formal inspection findings and committee remarks")
-    recommendation: str = Field("RECOMMENDED", description="RECOMMENDED, DEFICIENT_HEARING, NOT_RECOMMENDED")
-    infra_verified: bool = Field(True, description="Campus land and instructional area verified")
-    faculty_verified: bool = Field(True, description="Faculty cadre and physical presence verified")
-    labs_functional: bool = Field(True, description="Computing and laboratory equipment verified")
+    report_summary: Optional[str] = Field(None, description="Formal inspection findings and committee remarks")
+    remarks: Optional[str] = Field(None, description="Inspection remarks")
+    recommendation: Optional[str] = Field("RECOMMENDED", description="RECOMMENDED, DEFICIENT_HEARING, NOT_RECOMMENDED")
+    infra_verified: Optional[bool] = Field(True, description="Campus land and instructional area verified")
+    faculty_verified: Optional[bool] = Field(True, description="Faculty cadre and physical presence verified")
+    labs_functional: Optional[bool] = Field(True, description="Computing and laboratory equipment verified")
     file_id: Optional[int] = Field(None, description="Optional uploaded inspection report evidence file id")
+    report_url: Optional[str] = Field(None, description="Optional uploaded inspection report url")
 
 
 # --- Endpoints ---
 
+@router.get("")
+@router.get("/")
 @router.get("/queue")
 @router.get("/schedules")
 def list_evc_queue(
-    tab: Optional[str] = Query("queue", description="queue, overdue, calendar, all"),
-    region_id: Optional[int] = Query(None),
+    request: Request,
+    tab: Optional[str] = Query(None, description="queue, overdue, calendar, completed, all"),
+    status: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    region: Optional[str] = Query(None),
+    region_id: Optional[int] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     List EVC schedules with role scoping.
+    Role-scoped:
+    - Institution sees own
+    - Regional officer / head sees own region
+    - Bureau and Admin see all
+    - EVC member sees assigned
     Prioritises New Institutions (is_new_institution = True) at the top of the queue.
     """
     now = get_system_now(db)
     base_query = scope_evc_schedules_by_role(db.query(EVCSchedule), current_user, db)
 
+    # Filter by region_id or region name if specified
     if region_id and current_user.role in [UserRole.ADMIN.value, UserRole.BUREAU_OFFICER.value]:
         base_query = base_query.join(Application, EVCSchedule.application_id == Application.id).filter(
             Application.region_id == region_id
         )
+    elif region and current_user.role in [UserRole.ADMIN.value, UserRole.BUREAU_OFFICER.value]:
+        if region.isdigit():
+            base_query = base_query.join(Application, EVCSchedule.application_id == Application.id).filter(
+                Application.region_id == int(region)
+            )
+        else:
+            base_query = base_query.join(Application, EVCSchedule.application_id == Application.id).join(
+                Region, Application.region_id == Region.id
+            ).filter(Region.name.ilike(f"%{region}%"))
 
     all_schedules = base_query.all()
     formatted = [format_evc_schedule(s, now, db) for s in all_schedules]
 
-    # Filter based on tab
-    if tab == "queue":
-        formatted = [s for s in formatted if s["status"] in ["QUEUED", "SCHEDULED", "DUE_SOON"]]
-    elif tab == "overdue":
+    # Effective tab: if route path ends with /queue or /schedules, or tab is "queue"
+    effective_tab = (tab or "").lower()
+    path = request.url.path.rstrip("/")
+    if not effective_tab and (path.endswith("/queue") or path.endswith("/schedules")):
+        effective_tab = "queue"
+
+    if effective_tab == "queue":
+        # Overdue items appear in the Overdue tab and also in Queue if not yet completed
+        formatted = [s for s in formatted if s["status"] != "COMPLETED" and s.get("completed_at") is None]
+    elif effective_tab == "overdue":
         formatted = [s for s in formatted if s["status"] == "OVERDUE"]
-    elif tab == "calendar":
-        formatted = [s for s in formatted if s["scheduled_date"] is not None]
+    elif effective_tab == "completed":
+        formatted = [s for s in formatted if s["status"] == "COMPLETED" or s.get("completed_at") is not None]
+    elif effective_tab == "calendar":
+        formatted = [s for s in formatted if s.get("scheduled_date") is not None]
 
-    # Additional user search / status filtering
-    if status_filter and status_filter != "ALL":
-        formatted = [s for s in formatted if s["status"] == status_filter]
+    # Status filter
+    effective_status = status or status_filter
+    if effective_status and effective_status.upper() != "ALL":
+        formatted = [s for s in formatted if s["status"].upper() == effective_status.upper()]
 
+    # Search filter
     if search:
         s_lower = search.lower()
         formatted = [
             s for s in formatted
             if (s["application_ref_no"] and s_lower in s["application_ref_no"].lower()) or
                (s["institution_name"] and s_lower in s["institution_name"].lower()) or
-               (s["state"] and s_lower in s["state"].lower())
+               (s["state"] and s_lower in s["state"].lower()) or
+               (s["region_name"] and s_lower in s["region_name"].lower()) or
+               any(m["name"] and s_lower in m["name"].lower() for m in s.get("committee_members", []))
         ]
 
-    # Requirement: Prioritise new institutions (is_new_institution = True) with shorter due windows
-    if tab == "queue":
+    # Prioritise new institutions (is_new_institution = True) with shorter due windows in queue
+    if effective_tab == "queue":
         formatted.sort(key=lambda item: (0 if item["is_new_institution"] else 1, item["due_date"] or ""))
-    elif tab == "overdue":
+    elif effective_tab == "overdue":
         formatted.sort(key=lambda item: item["days_overdue"], reverse=True)
-    elif tab == "calendar":
+    elif effective_tab == "calendar":
         formatted.sort(key=lambda item: item["scheduled_date"] or "")
+    else:
+        formatted.sort(key=lambda item: (0 if item["is_new_institution"] else 1, item["due_date"] or ""))
 
     return formatted
+
+
+@router.get("/stats")
+def get_evc_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns role-scoped statistics for EVC inspections:
+    queued, scheduled, due_this_week, overdue.
+    """
+    now = get_system_now(db)
+    base_query = scope_evc_schedules_by_role(db.query(EVCSchedule), current_user, db)
+    schedules = base_query.all()
+
+    queued = 0
+    scheduled = 0
+    due_this_week = 0
+    overdue = 0
+
+    one_week_ahead = now + timedelta(days=7)
+
+    for s in schedules:
+        st = compute_evc_status(s, now)
+        if st == "COMPLETED" or s.completed_at is not None:
+            continue
+        if st == "OVERDUE":
+            overdue += 1
+        elif st == "QUEUED" or not s.scheduled_date:
+            queued += 1
+        else:
+            scheduled += 1
+
+        check_date = s.scheduled_date or s.due_date
+        if check_date and now <= check_date <= one_week_ahead:
+            due_this_week += 1
+
+    return {
+        "queued": queued,
+        "scheduled": scheduled,
+        "due_this_week": due_this_week,
+        "overdue": overdue
+    }
 
 
 @router.get("/overdue")
@@ -328,13 +414,14 @@ def list_overdue_evc(
 
 @router.get("/calendar")
 def get_evc_calendar(
-    month: Optional[int] = Query(None, description="Month 1-12"),
+    month: Optional[str] = Query(None, description="Month e.g. YYYY-MM or 1-12"),
     year: Optional[int] = Query(None, description="Year e.g. 2026"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Returns calendar-formatted inspection visits for month view.
+    Accepts month as YYYY-MM (e.g. 2026-10) or separate month and year query params.
     """
     now = get_system_now(db)
     base_query = scope_evc_schedules_by_role(db.query(EVCSchedule), current_user, db)
@@ -342,10 +429,27 @@ def get_evc_calendar(
 
     formatted = [format_evc_schedule(s, now, db) for s in schedules if s.scheduled_date is not None]
 
-    if year:
-        formatted = [s for s in formatted if datetime.fromisoformat(s["scheduled_date"]).year == year]
+    target_year = year
+    target_month = None
+
     if month:
-        formatted = [s for s in formatted if datetime.fromisoformat(s["scheduled_date"]).month == month]
+        if "-" in month:
+            parts = month.split("-")
+            try:
+                target_year = int(parts[0])
+                target_month = int(parts[1])
+            except (ValueError, IndexError):
+                pass
+        else:
+            try:
+                target_month = int(month)
+            except ValueError:
+                pass
+
+    if target_year:
+        formatted = [s for s in formatted if datetime.fromisoformat(s["scheduled_date"]).year == target_year]
+    if target_month:
+        formatted = [s for s in formatted if datetime.fromisoformat(s["scheduled_date"]).month == target_month]
 
     formatted.sort(key=lambda item: item["scheduled_date"] or "")
     return formatted
@@ -436,9 +540,17 @@ def schedule_evc_visit(
     if schedule.completed_at or schedule.status == "COMPLETED":
         raise HTTPException(status_code=400, detail="Cannot schedule an already completed inspection")
 
+    target_dt = req.date or req.scheduled_date
+    if not target_dt:
+        raise HTTPException(status_code=400, detail="scheduled_date or date is required")
+
+    target_c_ids = req.committee_member_ids if req.committee_member_ids is not None else req.committee_ids
+    if not target_c_ids or len(target_c_ids) == 0:
+        raise HTTPException(status_code=400, detail="At least one committee member ID is required")
+
     # Validate committee members
-    valid_members = db.query(User).filter(User.id.in_(req.committee_ids)).all()
-    if len(valid_members) != len(req.committee_ids):
+    valid_members = db.query(User).filter(User.id.in_(target_c_ids)).all()
+    if len(valid_members) != len(target_c_ids):
         raise HTTPException(status_code=400, detail="One or more specified committee member IDs do not exist")
 
     old_val = {
@@ -447,13 +559,18 @@ def schedule_evc_visit(
         "committee_ids": schedule.committee_ids
     }
 
-    sched_naive = to_naive_utc(req.scheduled_date)
+    sched_naive = to_naive_utc(target_dt)
     schedule.scheduled_date = sched_naive
-    schedule.committee_ids = json.dumps(req.committee_ids)
+    schedule.committee_ids = json.dumps(target_c_ids)
     schedule.status = "SCHEDULED"
 
-    # Notify committee members
     app = schedule.application
+    if req.notes:
+        schedule.inspection_notes = req.notes
+        if app:
+            app.evc_remarks = req.notes
+
+    # Notify committee members
     inst_name = app.institution.name if app and app.institution else "Institution"
     ref_no = app.ref_no if app else f"EVC #{schedule.id}"
     for m in valid_members:
@@ -477,8 +594,9 @@ def schedule_evc_visit(
         new_value={
             "status": "SCHEDULED",
             "scheduled_date": sched_naive.isoformat(),
-            "committee_ids": req.committee_ids,
-            "committee_names": [m.name for m in valid_members]
+            "committee_ids": target_c_ids,
+            "committee_names": [m.name for m in valid_members],
+            "notes": req.notes
         },
         details=f"EVC Inspection for {ref_no} ({inst_name}) scheduled for {sched_naive.strftime('%Y-%m-%d')} with {len(valid_members)} committee experts.",
         ip_address=get_client_ip(request)
@@ -522,19 +640,25 @@ def reschedule_evc_visit(
     if not req.reason or not req.reason.strip():
         raise HTTPException(status_code=400, detail="A mandatory justification reason must be recorded when rescheduling an EVC visit")
 
+    target_dt = req.new_date or req.date or req.scheduled_date
+    if not target_dt:
+        raise HTTPException(status_code=400, detail="new_date or scheduled_date is required")
+
     old_val = {
         "scheduled_date": schedule.scheduled_date.isoformat() if schedule.scheduled_date else None,
         "status": schedule.status,
         "committee_ids": schedule.committee_ids
     }
 
-    sched_naive = to_naive_utc(req.scheduled_date)
+    sched_naive = to_naive_utc(target_dt)
     schedule.scheduled_date = sched_naive
-    if req.committee_ids is not None:
-        schedule.committee_ids = json.dumps(req.committee_ids)
+
+    target_c_ids = req.committee_member_ids if req.committee_member_ids is not None else req.committee_ids
+    if target_c_ids is not None:
+        schedule.committee_ids = json.dumps(target_c_ids)
 
     # Check if new date exceeds statutory due date
-    if sched_naive > schedule.due_date:
+    if schedule.due_date and sched_naive > schedule.due_date:
         schedule.status = "OVERDUE"
     else:
         schedule.status = "SCHEDULED"
@@ -542,6 +666,9 @@ def reschedule_evc_visit(
     app = schedule.application
     inst_name = app.institution.name if app and app.institution else "Institution"
     ref_no = app.ref_no if app else f"EVC #{schedule.id}"
+
+    if req.notes and app:
+        app.evc_remarks = req.notes
 
     # Notify members
     c_ids = []
@@ -571,7 +698,8 @@ def reschedule_evc_visit(
         new_value={
             "scheduled_date": sched_naive.isoformat(),
             "reason": req.reason,
-            "status": schedule.status
+            "status": schedule.status,
+            "notes": req.notes
         },
         details=f"EVC visit for {ref_no} rescheduled by {current_user.name} ({current_user.role}). Reason: {req.reason}",
         ip_address=get_client_ip(request)
@@ -595,6 +723,8 @@ def complete_evc_inspection(
         UserRole.EVC_MEMBER.value,
         UserRole.ADMIN.value,
         UserRole.REGIONAL_OFFICER.value,
+        UserRole.REGIONAL_HEAD.value,
+        UserRole.BUREAU_OFFICER.value,
         "EVC_INSPECTOR"
     ])),
     db: Session = Depends(get_db)
@@ -621,8 +751,10 @@ def complete_evc_inspection(
     schedule.status = "COMPLETED"
 
     # Store EVC remarks and recommendation on application
-    app.evc_remarks = req.report_summary
-    app.evc_recommendation = req.recommendation
+    summary = req.remarks or req.report_summary or "Physical inspection findings and committee remarks."
+    rec = req.recommendation or "RECOMMENDED"
+    app.evc_remarks = summary
+    app.evc_recommendation = rec
 
     # Audit log for inspection completion
     AuditService.log(
@@ -635,33 +767,43 @@ def complete_evc_inspection(
         new_value={
             "status": "COMPLETED",
             "completed_at": now.isoformat(),
-            "recommendation": req.recommendation,
+            "recommendation": rec,
             "infra_verified": req.infra_verified,
             "faculty_verified": req.faculty_verified,
             "labs_functional": req.labs_functional,
-            "report_summary": req.report_summary
+            "report_summary": summary,
+            "report_url": req.report_url,
+            "file_id": req.file_id
         },
-        details=f"EVC Chairman {current_user.name} submitted inspection report with verdict '{req.recommendation}'. Application auto-advancing to next stage.",
+        details=f"EVC Chairman {current_user.name} submitted inspection report with verdict '{rec}'. Application auto-advancing to next stage.",
         ip_address=get_client_ip(request)
     )
 
     db.commit()
 
     # Requirement: On completion, the application auto-advances to the next stage via workflow_service
-    advancement_remarks = f"EVC Inspection Completed. Recommendation: {req.recommendation}. Observations: {req.report_summary[:100]}"
-    updated_app = WorkflowService.complete_stage(
-        db=db,
-        application_id=app.id,
-        officer=current_user,
-        remarks=advancement_remarks,
-        ip_address=get_client_ip(request)
-    )
+    advancement_remarks = f"EVC Inspection Completed. Recommendation: {rec}. Observations: {summary[:100]}"
+    next_stage = app.current_stage
+    app_status = app.status
+    if app.current_stage not in ["APPROVED", "REJECTED"]:
+        if app.current_stage != "EVC":
+            app.current_stage = "EVC"
+            db.commit()
+        updated_app = WorkflowService.complete_stage(
+            db=db,
+            application_id=app.id,
+            officer=current_user,
+            remarks=advancement_remarks,
+            ip_address=get_client_ip(request)
+        )
+        next_stage = updated_app.current_stage
+        app_status = updated_app.status
 
     return {
         "status": "success",
-        "message": f"EVC inspection completed and application auto-advanced to stage '{updated_app.current_stage}'!",
-        "next_stage": updated_app.current_stage,
-        "application_status": updated_app.status,
+        "message": f"EVC inspection completed and application auto-advanced to stage '{next_stage}'!",
+        "next_stage": next_stage,
+        "application_status": app_status,
         "schedule": format_evc_schedule(schedule, now, db)
     }
 

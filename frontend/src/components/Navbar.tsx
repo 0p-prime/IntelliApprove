@@ -29,7 +29,7 @@ export const Navbar: React.FC = () => {
   ];
 
   return (
-    <nav className="bg-white border-b border-slate-200 sticky top-[57px] z-30 shadow-2xs">
+    <nav className="bg-white border-b border-[#E6E6E6] sticky top-[57px] z-30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 scrollbar-none">
           {navItems.map((item) => {
@@ -40,10 +40,10 @@ export const Navbar: React.FC = () => {
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) =>
-                  `inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
+                  `inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[8px] whitespace-nowrap transition-colors ${
                     isActive
-                      ? 'bg-[#0B2240] text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      ? 'bg-[#18181B] text-white'
+                      : 'text-[#595959] hover:text-[#111111] hover:bg-[#F4F4F5]'
                   }`
                 }
               >

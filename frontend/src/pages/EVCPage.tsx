@@ -1,95 +1,121 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Users,
-  CheckCircle2,
-  Clock,
-  MapPin,
-  Building2,
-  ArrowRight,
-  ShieldCheck,
-  AlertCircle,
-  Calendar,
-  RotateCcw,
-  Search,
-  Filter,
-  X,
-  FileText,
-  CheckSquare,
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
-  Award,
-  Layers,
-  FileCheck2,
-  UserCheck
+  X,
+  Users,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Search,
+  SlidersHorizontal,
+  Calendar as CalendarIcon,
+  FileText,
+  Upload,
+  Building,
+  MapPin,
+  ExternalLink,
+  ShieldAlert,
+  ArrowRight
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { EVCScheduleItem, EVCCommitteeMember } from '../types';
-import { StatusPill } from '../components/StatusPill';
-import { LoadingState, EmptyState, ErrorState } from '../components/States';
-import { HumanOversightBadge } from '../components/HumanOversightBadge';
+import { LoadingState, ErrorState } from '../components/States';
 import { useAuth } from '../context/AuthContext';
+import { Button } from '../components/ui/Button';
+import { Tabs } from '../components/ui/Tabs';
+import { Drawer } from '../components/ui/Drawer';
+import { HumanOversightBadge } from '../components/HumanOversightBadge';
+
+interface EVCStats {
+  queued: number;
+  scheduled: number;
+  due_this_week: number;
+  overdue: number;
+}
 
 export const EVCPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Tabs: 'queue' | 'calendar' | 'overdue'
-  const [activeTab, setActiveTab] = useState<'queue' | 'calendar' | 'overdue'>('queue');
+  // Role permissions
+  const canSchedule = ['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'SCRUTINY_OFFICER'].includes(user?.role || '');
+  const canComplete = ['EVC_MEMBER', 'EVC_INSPECTOR', 'ADMIN', 'REGIONAL_OFFICER', 'REGIONAL_HEAD', 'BUREAU_OFFICER'].includes(user?.role || '');
+  const isInstitution = user?.role === 'INSTITUTION';
+
+  // Tabs: Queue, Calendar, Overdue, Completed
+  const [activeTab, setActiveTab] = useState<'Queue' | 'Calendar' | 'Overdue' | 'Completed'>('Queue');
 
   // Data states
   const [schedules, setSchedules] = useState<EVCScheduleItem[]>([]);
+  const [stats, setStats] = useState<EVCStats>({ queued: 0, scheduled: 0, due_this_week: 0, overdue: 0 });
   const [committeeMembers, setCommitteeMembers] = useState<EVCCommitteeMember[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedRegion, setSelectedRegion] = useState<string>('ALL');
-  const [newInstitutionsOnly, setNewInstitutionsOnly] = useState<boolean>(false);
+  // Search & Filter Drawer state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState<boolean>(false);
+  const [filterRegion, setFilterRegion] = useState<string>('ALL');
+  const [filterType, setFilterType] = useState<string>('ALL');
+  const [filterCommittee, setFilterCommittee] = useState<string>('ALL');
+  const [activeCardFilter, setActiveCardFilter] = useState<'queued' | 'scheduled' | 'due_this_week' | 'overdue' | null>(null);
 
-  // Modals state
+  // Pagination
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 10;
+
+  // Calendar month state
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+
+  // Drawers and Modals
+  const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState<boolean>(false);
   const [schedulingItem, setSchedulingItem] = useState<EVCScheduleItem | null>(null);
   const [scheduleDate, setScheduleDate] = useState<string>('');
   const [selectedCommitteeIds, setSelectedCommitteeIds] = useState<number[]>([]);
+  const [scheduleNotes, setScheduleNotes] = useState<string>('');
   const [submittingSchedule, setSubmittingSchedule] = useState<boolean>(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
-  // Reschedule state
-  const [reschedulingItem, setReschedulingItem] = useState<EVCScheduleItem | null>(null);
+  // Visit Detail Drawer
+  const [isVisitDrawerOpen, setIsVisitDrawerOpen] = useState<boolean>(false);
+  const [selectedVisit, setSelectedVisit] = useState<EVCScheduleItem | null>(null);
+
+  // Reschedule Modal
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState<boolean>(false);
   const [rescheduleDate, setRescheduleDate] = useState<string>('');
   const [rescheduleReason, setRescheduleReason] = useState<string>('');
   const [submittingReschedule, setSubmittingReschedule] = useState<boolean>(false);
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
-  // Complete Inspection Modal state
-  const [completingItem, setCompletingItem] = useState<EVCScheduleItem | null>(null);
-  const [reportSummary, setReportSummary] = useState<string>('');
-  const [recommendation, setRecommendation] = useState<string>('RECOMMENDED');
-  const [infraVerified, setInfraVerified] = useState<boolean>(true);
-  const [facultyVerified, setFacultyVerified] = useState<boolean>(true);
-  const [labsFunctional, setLabsFunctional] = useState<boolean>(true);
+  // Complete Stage Modal
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState<boolean>(false);
+  const [completeRemarks, setCompleteRemarks] = useState<string>('');
+  const [completeRecommendation, setCompleteRecommendation] = useState<string>('RECOMMENDED');
+  const [completeReportUrl, setCompleteReportUrl] = useState<string>('');
+  const [completeInfra, setCompleteInfra] = useState<boolean>(true);
+  const [completeFaculty, setCompleteFaculty] = useState<boolean>(true);
+  const [completeLabs, setCompleteLabs] = useState<boolean>(true);
   const [submittingComplete, setSubmittingComplete] = useState<boolean>(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
 
-  // Calendar month state
-  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
-  const [selectedDaySchedules, setSelectedDaySchedules] = useState<{ day: number; items: EVCScheduleItem[] } | null>(null);
-
+  // Fetch data
   const fetchEVCData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [schedData, membersData] = await Promise.all([
-        apiRequest<EVCScheduleItem[]>(`/evc/schedules?tab=${activeTab}`),
+      const tabParam = activeTab.toLowerCase();
+      const [schedData, statsData, membersData] = await Promise.all([
+        apiRequest<EVCScheduleItem[]>(`/evc?tab=${tabParam}`),
+        apiRequest<EVCStats>('/evc/stats').catch(() => ({ queued: 0, scheduled: 0, due_this_week: 0, overdue: 0 })),
         apiRequest<EVCCommitteeMember[]>('/evc/committee-members').catch(() => [])
       ]);
-      setSchedules(schedData);
-      setCommitteeMembers(membersData);
+      setSchedules(schedData || []);
+      setStats(statsData);
+      setCommitteeMembers(membersData || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load EVC schedule data');
+      setError(err.message || 'Failed to load EVC schedules');
     } finally {
       setLoading(false);
     }
@@ -97,148 +123,252 @@ export const EVCPage: React.FC = () => {
 
   useEffect(() => {
     fetchEVCData();
+    setCurrentPage(1);
   }, [activeTab]);
 
-  // Filtered schedules for current tab
+  // Format Due column text
+  const formatDue = (item: EVCScheduleItem): string => {
+    if (item.status === 'COMPLETED' || item.completed_at) {
+      return 'Completed';
+    }
+    if (item.is_overdue || item.days_overdue > 0) {
+      return `${item.days_overdue || Math.abs(item.days_remaining)} days overdue`;
+    }
+    if (item.days_remaining === 0) return 'Due today';
+    if (item.days_remaining > 0) return `Due in ${item.days_remaining} days`;
+    return '14 days';
+  };
+
+  // Format Committee column text
+  const formatCommittee = (item: EVCScheduleItem): string => {
+    if (item.committee_members && item.committee_members.length > 0) {
+      return item.committee_members.map((m) => m.name).slice(0, 2).join(', ');
+    }
+    if (item.status === 'QUEUED' || !item.scheduled_date) {
+      return 'Not assigned';
+    }
+    return 'Expert Committee';
+  };
+
+  // Compute status pill matching design: Due soon, Overdue, In queue, Scheduled, Completed
+  const computeStatus = (item: EVCScheduleItem): 'Due soon' | 'Overdue' | 'In queue' | 'Scheduled' | 'Completed' => {
+    if (item.status === 'COMPLETED' || item.completed_at) {
+      return 'Completed';
+    }
+    if (item.is_overdue || item.status === 'OVERDUE' || item.days_overdue > 0) {
+      return 'Overdue';
+    }
+    if (item.is_due_soon || (item.days_remaining <= 3 && item.days_remaining >= 0)) {
+      return 'Due soon';
+    }
+    if (item.status === 'QUEUED' || !item.scheduled_date) {
+      return 'In queue';
+    }
+    return 'Scheduled';
+  };
+
+  // Stat card click filter handling
+  const handleStatCardClick = (filter: 'queued' | 'scheduled' | 'due_this_week' | 'overdue') => {
+    if (activeCardFilter === filter) {
+      setActiveCardFilter(null);
+      return;
+    }
+    setActiveCardFilter(filter);
+    if (filter === 'overdue') {
+      setActiveTab('Overdue');
+    } else {
+      setActiveTab('Queue');
+    }
+    setCurrentPage(1);
+  };
+
+  // Filtered list
   const filteredSchedules = useMemo(() => {
-    return schedules.filter((s) => {
-      if (selectedRegion !== 'ALL' && s.region_name !== selectedRegion) {
-        return false;
+    return schedules.filter((item) => {
+      // 1. Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesInst = item.institution_name?.toLowerCase().includes(q);
+        const matchesRef = item.application_ref_no?.toLowerCase().includes(q);
+        const matchesState = item.state?.toLowerCase().includes(q);
+        const matchesRegion = item.region_name?.toLowerCase().includes(q);
+        const matchesCommittee = item.committee_members?.some((m) => m.name.toLowerCase().includes(q));
+        if (!matchesInst && !matchesRef && !matchesState && !matchesRegion && !matchesCommittee) {
+          return false;
+        }
       }
-      if (newInstitutionsOnly && !s.is_new_institution) {
-        return false;
+
+      // 2. Card filter
+      if (activeCardFilter === 'queued') {
+        const st = computeStatus(item);
+        if (st !== 'In queue') return false;
+      } else if (activeCardFilter === 'scheduled') {
+        const st = computeStatus(item);
+        if (st !== 'Scheduled' && st !== 'Due soon') return false;
+      } else if (activeCardFilter === 'due_this_week') {
+        if (item.status === 'COMPLETED' || item.completed_at) return false;
+        if (item.days_remaining > 7 || item.days_remaining < 0) return false;
+      } else if (activeCardFilter === 'overdue') {
+        const st = computeStatus(item);
+        if (st !== 'Overdue') return false;
       }
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchesRef = s.application_ref_no?.toLowerCase().includes(query);
-        const matchesInst = s.institution_name?.toLowerCase().includes(query);
-        const matchesState = s.state?.toLowerCase().includes(query);
-        if (!matchesRef && !matchesInst && !matchesState) return false;
+
+      // 3. Region filter
+      if (filterRegion !== 'ALL') {
+        if (item.region_name !== filterRegion) return false;
       }
+
+      // 4. Institution Type filter
+      if (filterType !== 'ALL') {
+        if (item.institution_type !== filterType) return false;
+      }
+
+      // 5. Committee filter
+      if (filterCommittee === 'ASSIGNED') {
+        if (!item.committee_members || item.committee_members.length === 0) return false;
+      } else if (filterCommittee === 'UNASSIGNED') {
+        if (item.committee_members && item.committee_members.length > 0) return false;
+      }
+
       return true;
     });
-  }, [schedules, selectedRegion, newInstitutionsOnly, searchTerm]);
+  }, [schedules, searchQuery, activeCardFilter, filterRegion, filterType, filterCommittee]);
 
-  // Handle Schedule Visit
-  const handleOpenScheduleModal = (item: EVCScheduleItem) => {
-    setSchedulingItem(item);
+  // Paginated list
+  const paginatedSchedules = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSchedules.slice(start, start + pageSize);
+  }, [filteredSchedules, currentPage]);
+
+  const totalPages = Math.ceil(filteredSchedules.length / pageSize) || 1;
+
+  // Actions
+  const handleOpenScheduleModal = (target?: EVCScheduleItem) => {
+    setSchedulingItem(target || null);
     setScheduleError(null);
-    // Default date: 7 days from now at 10:00 AM
     const d = new Date();
     d.setDate(d.getDate() + 7);
     d.setHours(10, 0, 0, 0);
     setScheduleDate(d.toISOString().slice(0, 16));
-    setSelectedCommitteeIds(item.committee_ids.length > 0 ? item.committee_ids : []);
+    setSelectedCommitteeIds(target?.committee_ids?.length ? target.committee_ids : []);
+    setScheduleNotes('');
+    setIsScheduleDrawerOpen(true);
   };
 
   const handleScheduleSubmit = async () => {
-    if (!schedulingItem) return;
+    if (!schedulingItem && !schedules.length) return;
+    const targetId = schedulingItem?.id || schedules.find((s) => s.status === 'QUEUED')?.id || schedules[0]?.id;
+    if (!targetId) return;
+
     if (!scheduleDate) {
       setScheduleError('Please select a visit date and time.');
       return;
     }
     if (selectedCommitteeIds.length === 0) {
-      setScheduleError('Please pick at least one Expert Visit Committee member.');
+      setScheduleError('Please pick at least one committee member.');
       return;
     }
 
     setSubmittingSchedule(true);
     setScheduleError(null);
     try {
-      await apiRequest(`/evc/${schedulingItem.id}/schedule`, {
+      await apiRequest(`/evc/${targetId}/schedule`, {
         method: 'POST',
         body: JSON.stringify({
           scheduled_date: new Date(scheduleDate).toISOString(),
-          committee_ids: selectedCommitteeIds
+          committee_ids: selectedCommitteeIds,
+          notes: scheduleNotes
         })
       });
-      setSchedulingItem(null);
+      setIsScheduleDrawerOpen(false);
       await fetchEVCData();
-      alert('EVC physical inspection visit scheduled successfully! Committee members notified.');
     } catch (err: any) {
-      setScheduleError(err.message || 'Failed to schedule visit');
+      setScheduleError(err.message || 'Failed to schedule inspection');
     } finally {
       setSubmittingSchedule(false);
     }
   };
 
-  // Handle Reschedule Visit
-  const handleOpenRescheduleModal = (item: EVCScheduleItem) => {
-    setReschedulingItem(item);
+  const handleOpenReschedule = (item: EVCScheduleItem) => {
+    setSelectedVisit(item);
     setRescheduleError(null);
-    setRescheduleReason('');
-    const d = item.scheduled_date ? new Date(item.scheduled_date) : new Date();
-    d.setDate(d.getDate() + 3);
+    const d = new Date();
+    d.setDate(d.getDate() + 5);
+    d.setHours(10, 0, 0, 0);
     setRescheduleDate(d.toISOString().slice(0, 16));
+    setRescheduleReason('');
+    setIsRescheduleModalOpen(true);
   };
 
   const handleRescheduleSubmit = async () => {
-    if (!reschedulingItem) return;
+    if (!selectedVisit) return;
     if (!rescheduleDate) {
-      setRescheduleError('Please select the new rescheduled date.');
+      setRescheduleError('Please select a new scheduled date.');
       return;
     }
     if (!rescheduleReason.trim()) {
-      setRescheduleError('A mandatory administrative reason is required for rescheduling.');
+      setRescheduleError('A mandatory speaking reason must be provided for rescheduling.');
       return;
     }
 
     setSubmittingReschedule(true);
     setRescheduleError(null);
     try {
-      await apiRequest(`/evc/${reschedulingItem.id}/reschedule`, {
+      await apiRequest(`/evc/${selectedVisit.id}/reschedule`, {
         method: 'POST',
         body: JSON.stringify({
-          scheduled_date: new Date(rescheduleDate).toISOString(),
-          reason: rescheduleReason.trim()
+          new_date: new Date(rescheduleDate).toISOString(),
+          reason: rescheduleReason
         })
       });
-      setReschedulingItem(null);
+      setIsRescheduleModalOpen(false);
+      if (isVisitDrawerOpen) setIsVisitDrawerOpen(false);
       await fetchEVCData();
-      alert('EVC inspection visit rescheduled and logged to audit trail.');
     } catch (err: any) {
-      setRescheduleError(err.message || 'Failed to reschedule visit');
+      setRescheduleError(err.message || 'Failed to reschedule inspection');
     } finally {
       setSubmittingReschedule(false);
     }
   };
 
-  // Handle Complete Inspection (Auto-advancement)
-  const handleOpenCompleteModal = (item: EVCScheduleItem) => {
-    setCompletingItem(item);
+  const handleOpenComplete = (item: EVCScheduleItem) => {
+    setSelectedVisit(item);
     setCompleteError(null);
-    setReportSummary('');
-    setRecommendation('RECOMMENDED');
-    setInfraVerified(true);
-    setFacultyVerified(true);
-    setLabsFunctional(true);
+    setCompleteRemarks('');
+    setCompleteRecommendation('RECOMMENDED');
+    setCompleteReportUrl('');
+    setCompleteInfra(true);
+    setCompleteFaculty(true);
+    setCompleteLabs(true);
+    setIsCompleteModalOpen(true);
   };
 
   const handleCompleteSubmit = async () => {
-    if (!completingItem) return;
-    if (!reportSummary.trim() || reportSummary.trim().length < 10) {
-      setCompleteError('Please provide formal committee inspection observations (minimum 10 characters).');
+    if (!selectedVisit) return;
+    if (!completeRemarks.trim()) {
+      setCompleteError('Please provide inspection findings and committee remarks.');
       return;
     }
 
     setSubmittingComplete(true);
     setCompleteError(null);
     try {
-      const res: any = await apiRequest(`/evc/${completingItem.id}/complete`, {
+      await apiRequest(`/evc/${selectedVisit.id}/complete`, {
         method: 'POST',
         body: JSON.stringify({
-          report_summary: reportSummary.trim(),
-          recommendation,
-          infra_verified: infraVerified,
-          faculty_verified: facultyVerified,
-          labs_functional: labsFunctional
+          remarks: completeRemarks,
+          recommendation: completeRecommendation,
+          report_url: completeReportUrl,
+          infra_verified: completeInfra,
+          faculty_verified: completeFaculty,
+          labs_functional: completeLabs
         })
       });
-      setCompletingItem(null);
+      setIsCompleteModalOpen(false);
+      if (isVisitDrawerOpen) setIsVisitDrawerOpen(false);
       await fetchEVCData();
-      alert(res.message || 'EVC inspection completed and application auto-advanced to the next stage!');
     } catch (err: any) {
-      setCompleteError(err.message || 'Failed to complete inspection');
+      setCompleteError(err.message || 'Failed to complete visit stage');
     } finally {
       setSubmittingComplete(false);
     }
@@ -265,926 +395,1118 @@ export const EVCPage: React.FC = () => {
     return map;
   }, [schedules, year, month]);
 
-  const canManageSchedule =
-    user?.role === 'REGIONAL_OFFICER' ||
-    user?.role === 'REGIONAL_HEAD' ||
-    user?.role === 'BUREAU_OFFICER' ||
-    user?.role === 'ADMIN' ||
-    user?.role === 'SCRUTINY_OFFICER';
-
-  const canCompleteInspection =
-    user?.role === 'EVC_MEMBER' ||
-    user?.role === 'EVC_INSPECTOR' ||
-    user?.role === 'ADMIN' ||
-    user?.role === 'REGIONAL_OFFICER';
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                Expert Visit Committee (EVC) Operations
-              </h1>
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-[#0B2240] border border-blue-200">
-                AICTE APH Norms
-              </span>
-              <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">
-                Role: <strong>{user?.role}</strong>
-              </span>
+    <div className="font-sans antialiased text-[#18181B] bg-white">
+      {/* SECTION 1: HEADER & "SCHEDULE VISIT" ACTION */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#18181B]">
+            EVC physical inspections
+          </h1>
+          <p className="text-sm text-[#595959] mt-1 font-normal">
+            Queue, schedule and overdue
+          </p>
+        </div>
+
+        {/* Schedule Visit Button (Brand Key Action, hidden if role cannot schedule) */}
+        {canSchedule && (
+          <Button
+            variant="brand"
+            onClick={() => handleOpenScheduleModal()}
+            className="self-start sm:self-auto shrink-0"
+          >
+            Schedule visit
+          </Button>
+        )}
+      </div>
+
+      {/* SECTION 2: 4 STAT CARDS (Clickable filter) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Card 1: In queue */}
+        <div
+          onClick={() => handleStatCardClick('queued')}
+          className={`p-6 bg-white border rounded-[8px] flex flex-col justify-between cursor-pointer transition-colors ${
+            activeCardFilter === 'queued' ? 'border-[#18181B] bg-[#FAFAFA]' : 'border-[#E6E6E6] hover:border-[#18181B]'
+          }`}
+        >
+          <div className="text-4xl font-bold text-[#18181B] tracking-tight">
+            {stats.queued}
+          </div>
+          <div className="text-sm text-[#595959] mt-1.5 font-normal flex items-center justify-between">
+            <span>In queue</span>
+            {activeCardFilter === 'queued' && <span className="text-xs text-[#18181B] font-medium">Filtered</span>}
+          </div>
+        </div>
+
+        {/* Card 2: Scheduled */}
+        <div
+          onClick={() => handleStatCardClick('scheduled')}
+          className={`p-6 bg-white border rounded-[8px] flex flex-col justify-between cursor-pointer transition-colors ${
+            activeCardFilter === 'scheduled' ? 'border-[#18181B] bg-[#FAFAFA]' : 'border-[#E6E6E6] hover:border-[#18181B]'
+          }`}
+        >
+          <div className="text-4xl font-bold text-[#18181B] tracking-tight">
+            {stats.scheduled}
+          </div>
+          <div className="text-sm text-[#595959] mt-1.5 font-normal flex items-center justify-between">
+            <span>Scheduled</span>
+            {activeCardFilter === 'scheduled' && <span className="text-xs text-[#18181B] font-medium">Filtered</span>}
+          </div>
+        </div>
+
+        {/* Card 3: Due this week */}
+        <div
+          onClick={() => handleStatCardClick('due_this_week')}
+          className={`p-6 bg-white border rounded-[8px] flex flex-col justify-between cursor-pointer transition-colors ${
+            activeCardFilter === 'due_this_week' ? 'border-[#18181B] bg-[#FAFAFA]' : 'border-[#E6E6E6] hover:border-[#18181B]'
+          }`}
+        >
+          <div className="text-4xl font-bold text-[#18181B] tracking-tight">
+            {stats.due_this_week}
+          </div>
+          <div className="text-sm text-[#595959] mt-1.5 font-normal flex items-center justify-between">
+            <span>Due this week</span>
+            {activeCardFilter === 'due_this_week' && <span className="text-xs text-[#18181B] font-medium">Filtered</span>}
+          </div>
+        </div>
+
+        {/* Card 4: Overdue (RED border & RED text) */}
+        <div
+          onClick={() => handleStatCardClick('overdue')}
+          className={`p-6 bg-white border rounded-[8px] flex flex-col justify-between cursor-pointer transition-colors ${
+            activeCardFilter === 'overdue' ? 'border-[#B5121A] bg-red-50/40' : 'border-[#E0202A] hover:bg-red-50/20'
+          }`}
+        >
+          <div className="text-4xl font-bold text-[#B5121A] tracking-tight">
+            {stats.overdue}
+          </div>
+          <div className="text-sm text-[#B5121A] mt-1.5 font-medium flex items-center justify-between">
+            <span>Overdue</span>
+            {activeCardFilter === 'overdue' && <span className="text-xs font-bold">Filtered</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 3: TABS (Queue, Calendar, Overdue, Completed) */}
+      <div className="mb-6">
+        <Tabs
+          tabs={['Queue', 'Calendar', 'Overdue', 'Completed']}
+          activeTab={activeTab}
+          onChange={(tab) => {
+            setActiveTab(tab as 'Queue' | 'Calendar' | 'Overdue' | 'Completed');
+            setActiveCardFilter(null);
+            setCurrentPage(1);
+          }}
+          aria-label="EVC Inspection Stages"
+        />
+      </div>
+
+      {/* ============================================================== */}
+      {/* SECTION 4A: TABLE VIEW (Queue, Overdue, Completed)             */}
+      {/* ============================================================== */}
+      {activeTab !== 'Calendar' && (
+        <div>
+          {/* SEARCH & FILTERS BAR */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-[#595959] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by institution, application, or committee..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-9 pr-8 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] placeholder-[#595959] focus:outline-none focus:border-[#18181B]"
+              />
+              {searchQuery && (
+                <Button
+                  size="icon"
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 min-w-7 min-h-7 rounded"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              )}
             </div>
-            <p className="text-xs text-slate-600 mt-1">
-              Statutory on-site and virtual inspection portal. New institutions are strictly prioritised with shorter prescribed timelines (10-day vs 21-day due window).
-            </p>
+
+            {/* Filters Toggle Button & Active Filter Tags */}
+            <div className="flex items-center gap-2">
+              {(filterRegion !== 'ALL' || filterType !== 'ALL' || filterCommittee !== 'ALL' || activeCardFilter) && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setFilterRegion('ALL');
+                    setFilterType('ALL');
+                    setFilterCommittee('ALL');
+                    setActiveCardFilter(null);
+                    setSearchQuery('');
+                  }}
+                >
+                  Reset filters
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsFilterDrawerOpen(true)}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 mr-1.5" />
+                Filters
+                {(filterRegion !== 'ALL' || filterType !== 'ALL' || filterCommittee !== 'ALL') && (
+                  <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[#E0202A]" />
+                )}
+              </Button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          {/* LOADING & ERROR STATES */}
+          {loading && (
+            <div className="py-16">
+              <LoadingState message="Loading EVC physical inspection schedules..." />
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="py-12">
+              <ErrorState message={error} onRetry={fetchEVCData} />
+            </div>
+          )}
+
+          {/* DATA TABLE */}
+          {!loading && !error && (
+            <>
+              {filteredSchedules.length === 0 ? (
+                <div className="py-16 text-center border border-[#E6E6E6] rounded-[8px] bg-white">
+                  <div className="w-12 h-12 rounded-full bg-[#F6F6F6] text-[#595959] flex items-center justify-center mx-auto mb-3">
+                    <CalendarIcon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-[#18181B]">No inspections found</h3>
+                  <p className="text-xs text-[#595959] mt-1 max-w-sm mx-auto">
+                    {searchQuery || activeCardFilter
+                      ? 'No physical inspection schedules match your search or filter criteria.'
+                      : `There are currently no inspections in the ${activeTab.toLowerCase()} list.`}
+                  </p>
+                  {(searchQuery || filterRegion !== 'ALL' || activeCardFilter) && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setFilterRegion('ALL');
+                        setFilterType('ALL');
+                        setFilterCommittee('ALL');
+                        setActiveCardFilter(null);
+                      }}
+                      className="mt-4"
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="border border-[#E6E6E6] rounded-[8px] overflow-hidden bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                      {/* Sticky Table Header */}
+                      <thead className="bg-[#FAFAFA] border-b border-[#E6E6E6] text-xs font-semibold text-[#595959] uppercase tracking-wider sticky top-0 z-10">
+                        <tr>
+                          <th className="py-3 px-4">Institution</th>
+                          <th className="py-3 px-4">Application</th>
+                          <th className="py-3 px-4">Type</th>
+                          <th className="py-3 px-4">Due</th>
+                          <th className="py-3 px-4">Committee</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E6E6E6]">
+                        {paginatedSchedules.map((item) => {
+                          const statusText = computeStatus(item);
+                          const isOverdue = statusText === 'Overdue';
+                          const isDueSoon = statusText === 'Due soon';
+
+                          return (
+                            <tr
+                              key={item.id}
+                              className="hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                              onClick={() => {
+                                setSelectedVisit(item);
+                                setIsVisitDrawerOpen(true);
+                              }}
+                            >
+                              {/* 1. Institution */}
+                              <td className="py-3.5 px-4 font-medium text-[#18181B] max-w-[240px]">
+                                <div className="truncate font-semibold">{item.institution_name}</div>
+                                <div className="text-xs text-[#595959] truncate flex items-center gap-1 mt-0.5">
+                                  <MapPin className="w-3 h-3 shrink-0" />
+                                  <span>{item.state || item.region_name || 'India'}</span>
+                                </div>
+                              </td>
+
+                              {/* 2. Application Ref */}
+                              <td className="py-3.5 px-4 text-xs font-mono text-[#595959]">
+                                <Link
+                                  to={`/applications/${item.application_id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[#18181B] hover:text-[#E0202A] underline flex items-center gap-1"
+                                >
+                                  <span>{item.application_ref_no || `APP-${item.application_id}`}</span>
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                </Link>
+                              </td>
+
+                              {/* 3. Type (New institution vs Existing) */}
+                              <td className="py-3.5 px-4 text-xs text-[#18181B]">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-[4px] font-medium ${
+                                    item.is_new_institution
+                                      ? 'bg-[#18181B] text-white font-semibold'
+                                      : 'bg-[#F4F4F5] text-[#595959] border border-[#E6E6E6]'
+                                  }`}
+                                >
+                                  {item.is_new_institution ? 'New institution' : 'Existing'}
+                                </span>
+                              </td>
+
+                              {/* 4. Due Column */}
+                              <td className="py-3.5 px-4 text-xs">
+                                <span
+                                  className={`font-medium ${
+                                    isOverdue ? 'text-[#B5121A] font-bold' : isDueSoon ? 'text-[#18181B]' : 'text-[#595959]'
+                                  }`}
+                                >
+                                  {formatDue(item)}
+                                </span>
+                              </td>
+
+                              {/* 5. Committee Column */}
+                              <td className="py-3.5 px-4 text-xs text-[#595959] max-w-[180px]">
+                                <span className="truncate block">{formatCommittee(item)}</span>
+                              </td>
+
+                              {/* 6. Status Badge */}
+                              <td className="py-3.5 px-4 text-xs">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[16px] text-xs font-medium border ${
+                                    isOverdue
+                                      ? 'border-[#E0202A] text-[#B5121A] bg-white'
+                                      : isDueSoon
+                                      ? 'border-[#18181B] text-[#18181B] bg-white'
+                                      : statusText === 'Completed'
+                                      ? 'border-[#E6E6E6] text-[#595959] bg-[#F4F4F5]'
+                                      : 'border-[#E6E6E6] text-[#18181B] bg-white'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      isOverdue
+                                        ? 'bg-[#E0202A]'
+                                        : isDueSoon
+                                        ? 'bg-[#18181B]'
+                                        : statusText === 'Completed'
+                                        ? 'bg-[#595959]'
+                                        : 'bg-[#18181B]'
+                                    }`}
+                                  />
+                                  <span>{statusText}</span>
+                                </span>
+                              </td>
+
+                              {/* 7. Action Button */}
+                              <td
+                                className="py-3.5 px-4 text-right"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {statusText === 'In queue' && canSchedule ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => handleOpenScheduleModal(item)}
+                                  >
+                                    Schedule
+                                  </Button>
+                                ) : isOverdue && canSchedule ? (
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => handleOpenReschedule(item)}
+                                  >
+                                    Reschedule
+                                  </Button>
+                                ) : statusText === 'Scheduled' || statusText === 'Due soon' ? (
+                                  <div className="inline-flex items-center gap-1.5">
+                                    {canComplete && (
+                                      <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => handleOpenComplete(item)}
+                                      >
+                                        Complete stage
+                                      </Button>
+                                    )}
+                                    {canSchedule && (
+                                      <Button
+                                        variant="quiet"
+                                        size="sm"
+                                        onClick={() => handleOpenReschedule(item)}
+                                      >
+                                        Reschedule
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="quiet"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedVisit(item);
+                                      setIsVisitDrawerOpen(true);
+                                    }}
+                                  >
+                                    View
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* PAGINATION BAR */}
+                  <div className="px-4 py-3 border-t border-[#E6E6E6] bg-[#FAFAFA] flex items-center justify-between text-xs text-[#595959]">
+                    <div>
+                      Showing {(currentPage - 1) * pageSize + 1} to{' '}
+                      {Math.min(currentPage * pageSize, filteredSchedules.length)} of{' '}
+                      {filteredSchedules.length} inspections
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={currentPage <= 1}
+                        onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+                        Previous
+                      </Button>
+                      <span className="font-medium text-[#18181B] px-2">
+                        {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={currentPage >= totalPages}
+                        onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                      >
+                        Next
+                        <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* SECTION 4B: CALENDAR VIEW                                      */}
+      {/* ============================================================== */}
+      {activeTab === 'Calendar' && (
+        <div className="border border-[#E6E6E6] rounded-[8px] bg-white p-6">
+          {/* Calendar Header with Navigation */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-[#18181B]">
+              {monthNames[month]} {year}
+            </h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCalendarDate(new Date(year, month - 1, 1))}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCalendarDate(new Date())}
+              >
+                Today
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCalendarDate(new Date(year, month + 1, 1))}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Month Grid */}
+          <div className="grid grid-cols-7 border-t border-l border-[#E6E6E6]">
+            {/* Weekday headers */}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <div
+                key={day}
+                className="py-2 text-center text-xs font-semibold text-[#595959] border-r border-b border-[#E6E6E6] bg-[#FAFAFA]"
+              >
+                {day}
+              </div>
+            ))}
+
+            {/* Empty days before 1st of month */}
+            {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+              <div
+                key={`empty-${i}`}
+                className="h-28 border-r border-b border-[#E6E6E6] bg-[#FAFAFA]/50"
+              />
+            ))}
+
+            {/* Days in Month */}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const dayNum = i + 1;
+              const events = calendarEventsByDay[dayNum] || [];
+              const isToday =
+                new Date().getDate() === dayNum &&
+                new Date().getMonth() === month &&
+                new Date().getFullYear() === year;
+
+              return (
+                <div
+                  key={`day-${dayNum}`}
+                  className={`h-28 border-r border-b border-[#E6E6E6] p-1.5 flex flex-col justify-between overflow-y-auto transition-colors ${
+                    isToday ? 'bg-[#FAFAFA]' : 'bg-white'
+                  }`}
+                >
+                  <div className="flex justify-between items-center text-xs">
+                    <span
+                      className={`w-6 h-6 flex items-center justify-center rounded-full font-medium ${
+                        isToday ? 'bg-[#18181B] text-white font-bold' : 'text-[#18181B]'
+                      }`}
+                    >
+                      {dayNum}
+                    </span>
+                    {events.length > 0 && (
+                      <span className="text-[10px] text-[#595959] font-medium">
+                        {events.length} visit{events.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Visit chips */}
+                  <div className="space-y-1 mt-1">
+                    {events.map((ev) => {
+                      const st = computeStatus(ev);
+                      const isOverdue = st === 'Overdue';
+                      const isCompleted = st === 'Completed';
+
+                      return (
+                        <div
+                          key={ev.id}
+                          onClick={() => {
+                            setSelectedVisit(ev);
+                            setIsVisitDrawerOpen(true);
+                          }}
+                          className={`px-2 py-1 rounded-[4px] text-[11px] font-medium truncate cursor-pointer transition-opacity hover:opacity-90 ${
+                            isOverdue
+                              ? 'bg-[#E0202A] text-white'
+                              : isCompleted
+                              ? 'bg-[#F4F4F5] text-[#18181B] border border-[#E6E6E6]'
+                              : 'bg-[#18181B] text-white'
+                          }`}
+                          title={`${ev.institution_name} (${st})`}
+                        >
+                          {ev.institution_name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* DRAWER 1: FILTERS DRAWER                                       */}
+      {/* ============================================================== */}
+      <Drawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        title="Filter inspections"
+        subtitle="Narrow down EVC visits by region, campus type, and committee status"
+        width="md"
+      >
+        <div className="p-6 space-y-6">
+          {/* Region Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+              AICTE Region
+            </label>
+            <select
+              value={filterRegion}
+              onChange={(e) => setFilterRegion(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] focus:outline-none focus:border-[#18181B]"
+            >
+              <option value="ALL">All Regions</option>
+              <option value="Northern">Northern Region</option>
+              <option value="Southern">Southern Region</option>
+              <option value="Western">Western Region</option>
+              <option value="Eastern">Eastern Region</option>
+              <option value="Central">Central Region</option>
+              <option value="North-Western">North-Western Region</option>
+              <option value="South-Western">South-Western Region</option>
+              <option value="South-Central">South-Central Region</option>
+            </select>
+          </div>
+
+          {/* Institution Type Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+              Institution Category
+            </label>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] focus:outline-none focus:border-[#18181B]"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="Engineering">Engineering & Technology</option>
+              <option value="Polytechnic">Polytechnic Institute</option>
+              <option value="Pharmacy">Pharmacy</option>
+              <option value="Management">Management (MBA/PGDM)</option>
+              <option value="Architecture">Architecture</option>
+            </select>
+          </div>
+
+          {/* Committee Assignment Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+              Committee Status
+            </label>
+            <select
+              value={filterCommittee}
+              onChange={(e) => setFilterCommittee(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] focus:outline-none focus:border-[#18181B]"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="ASSIGNED">Committee Assigned</option>
+              <option value="UNASSIGNED">Not Assigned</option>
+            </select>
+          </div>
+
+          <div className="pt-4 border-t border-[#E6E6E6] flex items-center justify-end gap-3">
+            <Button
+              variant="quiet"
+              size="sm"
+              onClick={() => {
+                setFilterRegion('ALL');
+                setFilterType('ALL');
+                setFilterCommittee('ALL');
+                setActiveCardFilter(null);
+              }}
+            >
+              Reset
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsFilterDrawerOpen(false)}
+            >
+              Apply
+            </Button>
+          </div>
+        </div>
+      </Drawer>
+
+      {/* ============================================================== */}
+      {/* DRAWER 2: SCHEDULE INSPECTION DRAWER                           */}
+      {/* ============================================================== */}
+      <Drawer
+        isOpen={isScheduleDrawerOpen}
+        onClose={() => setIsScheduleDrawerOpen(false)}
+        title={schedulingItem ? `Schedule: ${schedulingItem.institution_name}` : 'Schedule physical inspection'}
+        subtitle="Designate statutory inspection date and assign Expert Visit Committee experts"
+        width="lg"
+      >
+        <div className="p-6 space-y-5">
+          {scheduleError && (
+            <div className="p-3 bg-red-50 border border-[#E0202A] rounded-[8px] text-xs text-[#B5121A]">
+              {scheduleError}
+            </div>
+          )}
+
+          {/* Application Reference info */}
+          {schedulingItem && (
+            <div className="p-3 bg-[#F4F4F5] rounded-[8px] border border-[#E6E6E6] text-xs space-y-1">
+              <div className="font-semibold text-[#18181B]">{schedulingItem.institution_name}</div>
+              <div className="text-[#595959]">Application Ref: {schedulingItem.application_ref_no}</div>
+              <div className="text-[#595959]">Statutory Due: {schedulingItem.due_date ? new Date(schedulingItem.due_date).toLocaleDateString() : 'N/A'}</div>
+            </div>
+          )}
+
+          {/* Visit Date & Time Picker */}
+          <div>
+            <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+              Inspection Date & Time *
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduleDate}
+              onChange={(e) => setScheduleDate(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] focus:outline-none focus:border-[#18181B]"
+            />
+          </div>
+
+          {/* Multi-Select Committee Members */}
+          <div>
+            <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Select Committee Experts *</span>
+              <span className="text-[11px] font-normal text-[#595959]">
+                {selectedCommitteeIds.length} selected
+              </span>
+            </label>
+            <div className="max-h-56 overflow-y-auto border border-[#E6E6E6] rounded-[8px] divide-y divide-[#E6E6E6]">
+              {committeeMembers.map((m) => {
+                const isSelected = selectedCommitteeIds.includes(m.id);
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedCommitteeIds(selectedCommitteeIds.filter((id) => id !== m.id));
+                      } else {
+                        setSelectedCommitteeIds([...selectedCommitteeIds, m.id]);
+                      }
+                    }}
+                    className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${
+                      isSelected ? 'bg-[#FAFAFA]' : 'hover:bg-[#FAFAFA]'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-semibold text-[#18181B]">{m.name}</div>
+                      <div className="text-[11px] text-[#595959]">{m.region_name} • {m.role}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#F4F4F5] text-[#595959]">
+                        {m.active_assignments} active
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="accent-[#E0202A] w-4 h-4"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Notes / Special Instructions */}
+          <div>
+            <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+              Inspection Directives & Focus Areas
+            </label>
+            <textarea
+              rows={3}
+              placeholder="e.g. Verify barrier-free physical access, laboratory power ratings, and faculty original degrees..."
+              value={scheduleNotes}
+              onChange={(e) => setScheduleNotes(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs text-[#18181B] focus:outline-none focus:border-[#18181B] resize-none"
+            />
+          </div>
+
+          {/* Drawer Actions */}
+          <div className="pt-4 border-t border-[#E6E6E6] flex items-center justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setIsScheduleDrawerOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="brand"
+              loading={submittingSchedule}
+              onClick={handleScheduleSubmit}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Drawer>
+
+      {/* ============================================================== */}
+      {/* DRAWER 3: VISIT DETAIL DRAWER (With Timeline & Actions)         */}
+      {/* ============================================================== */}
+      <Drawer
+        isOpen={isVisitDrawerOpen}
+        onClose={() => setIsVisitDrawerOpen(false)}
+        title={selectedVisit?.institution_name || 'Inspection details'}
+        subtitle={selectedVisit?.application_ref_no}
+        width="lg"
+      >
+        {selectedVisit && (
+          <div className="p-6 space-y-6">
+            {/* Human Oversight Required Badge */}
             <HumanOversightBadge size="sm" showSubtitle={false} />
-          </div>
-        </div>
 
-        {/* Tab Navigation */}
-        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveTab('queue')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'queue'
-                  ? 'bg-white text-[#0B2240] shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Inspection Queue
-            </button>
-            <button
-              onClick={() => setActiveTab('calendar')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'calendar'
-                  ? 'bg-white text-[#0B2240] shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Calendar (Month View)
-            </button>
-            <button
-              onClick={() => setActiveTab('overdue')}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'overdue'
-                  ? 'bg-rose-600 text-white shadow-2xs'
-                  : 'text-rose-700 hover:text-rose-900 hover:bg-rose-50'
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Overdue Escalations
-            </button>
-          </div>
+            {/* Status & Timing Overview */}
+            <div className="p-4 bg-[#FAFAFA] border border-[#E6E6E6] rounded-[8px] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[#595959] uppercase font-semibold">Inspection Status</span>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[16px] text-xs font-medium border ${
+                    selectedVisit.is_overdue
+                      ? 'border-[#E0202A] text-[#B5121A] bg-white'
+                      : 'border-[#18181B] text-[#18181B] bg-white'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      selectedVisit.is_overdue ? 'bg-[#E0202A]' : 'bg-[#18181B]'
+                    }`}
+                  />
+                  <span>{computeStatus(selectedVisit)}</span>
+                </span>
+              </div>
 
-          {/* Quick Stats Summary */}
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span>
-              Total in view: <strong className="text-slate-900">{filteredSchedules.length}</strong>
-            </span>
-            <span>•</span>
-            <span>
-              New Campuses: <strong className="text-purple-700">{schedules.filter((s) => s.is_new_institution).length}</strong>
-            </span>
-          </div>
-        </div>
-
-        {/* Filter Controls (for Queue & Overdue tabs) */}
-        {activeTab !== 'calendar' && (
-          <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-              <div className="relative w-full">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter by ref no, institution, or state..."
-                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs focus:ring-2 focus:ring-[#0B2240] focus:bg-white"
-                />
+              <div className="grid grid-cols-2 gap-3 text-xs pt-2 border-t border-[#E6E6E6]">
+                <div>
+                  <div className="text-[#595959]">Scheduled Date:</div>
+                  <div className="font-semibold text-[#18181B] mt-0.5">
+                    {selectedVisit.scheduled_date
+                      ? new Date(selectedVisit.scheduled_date).toLocaleString()
+                      : 'Not scheduled yet'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[#595959]">Statutory Due Date:</div>
+                  <div className="font-semibold text-[#18181B] mt-0.5">
+                    {selectedVisit.due_date
+                      ? new Date(selectedVisit.due_date).toLocaleDateString()
+                      : 'N/A'}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={selectedRegion}
-                onChange={(e) => setSelectedRegion(e.target.value)}
-                className="p-1.5 bg-slate-50 border border-slate-300 rounded-md text-xs font-semibold text-slate-700"
-              >
-                <option value="ALL">All Regions</option>
-                <option value="Northern">Northern</option>
-                <option value="Southern">Southern</option>
-                <option value="Western">Western</option>
-                <option value="Eastern">Eastern</option>
-                <option value="Central">Central</option>
-                <option value="South-Western">South-Western</option>
-                <option value="North-Western">North-Western</option>
-                <option value="South-Central">South-Central</option>
-              </select>
+            {/* Institution Details */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
+                Campus Profile
+              </h4>
+              <div className="p-3 bg-white border border-[#E6E6E6] rounded-[8px] text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-[#595959]">Category:</span>
+                  <span className="font-medium text-[#18181B]">{selectedVisit.institution_type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#595959]">Status Type:</span>
+                  <span className="font-medium text-[#18181B]">
+                    {selectedVisit.is_new_institution ? 'New Institution (10-day window)' : 'Existing Campus (21-day window)'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#595959]">Region:</span>
+                  <span className="font-medium text-[#18181B]">{selectedVisit.region_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#595959]">State:</span>
+                  <span className="font-medium text-[#18181B]">{selectedVisit.state}</span>
+                </div>
+              </div>
+            </div>
 
-              <button
-                onClick={() => setNewInstitutionsOnly(!newInstitutionsOnly)}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
-                  newInstitutionsOnly
-                    ? 'bg-purple-100 text-purple-900 border-purple-400'
-                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                Prioritise New Institutions
-              </button>
+            {/* Assigned Committee Experts */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
+                Assigned Expert Visit Committee
+              </h4>
+              {selectedVisit.committee_members && selectedVisit.committee_members.length > 0 ? (
+                <div className="border border-[#E6E6E6] rounded-[8px] divide-y divide-[#E6E6E6]">
+                  {selectedVisit.committee_members.map((m) => (
+                    <div key={m.id} className="p-3 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-semibold text-[#18181B]">{m.name}</div>
+                        <div className="text-[11px] text-[#595959]">{m.email}</div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#F4F4F5] text-[#18181B] font-mono">
+                        {m.role}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 bg-[#FAFAFA] border border-[#E6E6E6] rounded-[8px] text-xs text-[#595959]">
+                  No committee experts assigned yet.
+                </div>
+              )}
+            </div>
 
-              {(searchTerm || selectedRegion !== 'ALL' || newInstitutionsOnly) && (
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedRegion('ALL');
-                    setNewInstitutionsOnly(false);
-                  }}
-                  className="px-2 py-1 text-slate-500 hover:text-slate-800 bg-slate-100 rounded text-xs"
+            {/* Timeline of Actions */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold text-[#18181B] uppercase tracking-wider">
+                Timeline & Verification Milestones
+              </h4>
+              <div className="border-l-2 border-[#E6E6E6] ml-3 pl-4 space-y-4 text-xs">
+                <div>
+                  <div className="font-semibold text-[#18181B]">Application Scrutiny Cleared</div>
+                  <div className="text-[11px] text-[#595959]">Preliminary documentation verified by Regional Office</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-[#18181B]">EVC Inspection Mandated</div>
+                  <div className="text-[11px] text-[#595959]">Physical infrastructure and faculty cadre inspection ordered</div>
+                </div>
+                {selectedVisit.scheduled_date && (
+                  <div>
+                    <div className="font-semibold text-[#18181B]">Inspection Scheduled</div>
+                    <div className="text-[11px] text-[#595959]">
+                      Set for {new Date(selectedVisit.scheduled_date).toLocaleDateString()} with committee experts
+                    </div>
+                  </div>
+                )}
+                {selectedVisit.completed_at && (
+                  <div>
+                    <div className="font-semibold text-[#18181B]">Inspection Completed</div>
+                    <div className="text-[11px] text-[#595959]">
+                      Verified on {new Date(selectedVisit.completed_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Drawer Action Buttons */}
+            <div className="pt-4 border-t border-[#E6E6E6] flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsVisitDrawerOpen(false)}
+              >
+                Close
+              </Button>
+              {canSchedule && !selectedVisit.completed_at && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleOpenReschedule(selectedVisit)}
                 >
-                  Clear
-                </button>
+                  Reschedule
+                </Button>
+              )}
+              {canComplete && !selectedVisit.completed_at && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleOpenComplete(selectedVisit)}
+                >
+                  Complete stage
+                </Button>
               )}
             </div>
           </div>
         )}
-      </div>
+      </Drawer>
 
-      {/* Main Tab Content */}
-      {loading ? (
-        <LoadingState message="Aggregating EVC inspection schedules and committee assignments..." />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchEVCData} />
-      ) : (
-        <>
-          {/* =========================================================================
-              TAB 1: QUEUE TAB
-             ========================================================================= */}
-          {activeTab === 'queue' && (
-            <div className="space-y-4">
-              {filteredSchedules.length === 0 ? (
-                <EmptyState
-                  title="No EVC Inspections in Queue"
-                  description="There are currently no active applications awaiting physical inspection in your scope."
-                />
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredSchedules.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`p-5 rounded-xl border shadow-2xs space-y-4 transition-all bg-white ${
-                        item.is_new_institution
-                          ? 'border-purple-200 ring-1 ring-purple-100 hover:border-purple-300'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      {/* Header Row */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-xs font-bold text-[#0B2240]">
-                              {item.application_ref_no || `App #${item.application_id}`}
-                            </span>
-
-                            {/* Required Badge 1: New Institution */}
-                            {item.is_new_institution && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
-                                <Sparkles className="w-3 h-3 text-purple-600" />
-                                New Institution (Priority Window)
-                              </span>
-                            )}
-
-                            {/* Status Badge */}
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                item.status === 'QUEUED'
-                                  ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                                  : item.status === 'SCHEDULED'
-                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
-                                  : item.status === 'DUE_SOON'
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
-                                  : item.status === 'OVERDUE'
-                                  ? 'bg-rose-100 text-rose-900 border border-rose-300'
-                                  : 'bg-emerald-100 text-emerald-900'
-                              }`}
-                            >
-                              {item.status.replace(/_/g, ' ')}
-                            </span>
-                          </div>
-
-                          <h3 className="font-bold text-sm text-slate-900 mt-1">
-                            {item.institution_name}
-                          </h3>
-                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                            {item.state} ({item.region_name} Directorate) • Discipline: {item.institution_type}
-                          </div>
-                        </div>
-
-                        {/* Required Badge 2 & 3: Due in X days / Overdue by X days */}
-                        <div className="shrink-0 text-right">
-                          {item.is_overdue ? (
-                            <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                              Overdue by {item.days_overdue} days
-                            </span>
-                          ) : (
-                            <span
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1 ${
-                                item.days_remaining <= 3
-                                  ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              }`}
-                            >
-                              <Clock className="w-3.5 h-3.5" />
-                              Due in {item.days_remaining} days
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Timeline & Committee Particulars */}
-                      <div className="p-3 bg-slate-50 rounded-lg text-xs space-y-2 border border-slate-100">
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-500 font-medium">Scheduled Visit Date:</span>
-                          <span className="font-bold text-slate-900 font-mono">
-                            {item.scheduled_date
-                              ? new Date(item.scheduled_date).toLocaleString([], {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
-                              : 'Not Yet Scheduled (In Queue)'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-500 font-medium">Prescribed Due Window:</span>
-                          <span className="font-semibold text-slate-700">
-                            {new Date(item.due_date).toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })} ({item.is_new_institution ? '10-day expedited norm' : '21-day standard norm'})
-                          </span>
-                        </div>
-                        <div className="pt-2 border-t border-slate-200">
-                          <span className="text-slate-500 font-medium block mb-1">Assigned Committee Members:</span>
-                          {item.committee_members.length === 0 ? (
-                            <span className="text-slate-400 italic">No experts assigned yet.</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
-                              {item.committee_members.map((m) => (
-                                <span
-                                  key={m.id}
-                                  className="px-2 py-0.5 rounded bg-white text-slate-800 border border-slate-200 text-[11px] font-medium"
-                                >
-                                  {m.name}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                        <Link
-                          to={`/applications/${item.application_id}`}
-                          className="text-xs text-blue-700 hover:text-blue-900 font-semibold inline-flex items-center gap-1"
-                        >
-                          View Full Case <ArrowRight className="w-3 h-3" />
-                        </Link>
-
-                        <div className="flex items-center gap-2">
-                          {/* Schedule / Reschedule Actions */}
-                          {canManageSchedule && item.status !== 'COMPLETED' && (
-                            item.status === 'QUEUED' ? (
-                              <button
-                                onClick={() => handleOpenScheduleModal(item)}
-                                className="px-3 py-1.5 bg-[#0B2240] hover:bg-[#07172C] text-white rounded text-xs font-bold shadow-2xs transition-colors cursor-pointer"
-                              >
-                                Schedule Visit
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenRescheduleModal(item)}
-                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-semibold border border-slate-200 transition-colors cursor-pointer flex items-center gap-1"
-                              >
-                                <RotateCcw className="w-3 h-3" />
-                                Reschedule
-                              </button>
-                            )
-                          )}
-
-                          {/* Complete Inspection Action */}
-                          {canCompleteInspection && item.status !== 'COMPLETED' && (
-                            <button
-                              onClick={() => handleOpenCompleteModal(item)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Complete & Upload Report
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* =========================================================================
-              TAB 2: CALENDAR TAB (MONTH VIEW WITH COLOUR-CODED VISITS)
-             ========================================================================= */}
-          {activeTab === 'calendar' && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 space-y-6">
-              {/* Calendar Month Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-slate-900">
-                    {calendarDate.toLocaleString('default', { month: 'long' })} {year}
-                  </h3>
-                  <button
-                    onClick={() => setCalendarDate(new Date())}
-                    className="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold cursor-pointer"
-                  >
-                    Today
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 text-xs mr-4">
-                    <span className="flex items-center gap-1 text-[11px] text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span> Scheduled
-                    </span>
-                    <span className="flex items-center gap-1 text-[11px] text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Due Soon
-                    </span>
-                    <span className="flex items-center gap-1 text-[11px] text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Overdue
-                    </span>
-                    <span className="flex items-center gap-1 text-[11px] text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span> Completed
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setCalendarDate(new Date(year, month - 1, 1))}
-                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer text-slate-600"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setCalendarDate(new Date(year, month + 1, 1))}
-                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer text-slate-600"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Month Grid */}
-              <div className="grid grid-cols-7 border-t border-l border-slate-200 text-xs">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                  <div
-                    key={d}
-                    className="p-2.5 bg-slate-50 font-bold text-center text-slate-600 border-r border-b border-slate-200 uppercase text-[10px]"
-                  >
-                    {d}
-                  </div>
-                ))}
-
-                {/* Empty cells before first day */}
-                {[...Array(firstDayOfMonth)].map((_, i) => (
-                  <div key={`empty-${i}`} className="min-h-[90px] bg-slate-50/40 border-r border-b border-slate-200" />
-                ))}
-
-                {/* Days of month */}
-                {[...Array(daysInMonth)].map((_, i) => {
-                  const dayNum = i + 1;
-                  const dayEvents = calendarEventsByDay[dayNum] || [];
-                  const isToday =
-                    new Date().getDate() === dayNum &&
-                    new Date().getMonth() === month &&
-                    new Date().getFullYear() === year;
-
-                  return (
-                    <div
-                      key={dayNum}
-                      onClick={() => dayEvents.length > 0 && setSelectedDaySchedules({ day: dayNum, items: dayEvents })}
-                      className={`min-h-[90px] p-2 border-r border-b border-slate-200 transition-colors ${
-                        dayEvents.length > 0 ? 'hover:bg-blue-50/40 cursor-pointer' : 'bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span
-                          className={`text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full ${
-                            isToday ? 'bg-[#0B2240] text-white' : 'text-slate-700'
-                          }`}
-                        >
-                          {dayNum}
-                        </span>
-                        {dayEvents.length > 0 && (
-                          <span className="text-[10px] font-bold text-slate-400">
-                            {dayEvents.length} visit{dayEvents.length > 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Event Pills */}
-                      <div className="space-y-1">
-                        {dayEvents.slice(0, 2).map((ev) => (
-                          <div
-                            key={ev.id}
-                            className={`px-1.5 py-0.5 rounded text-[10px] truncate font-semibold border ${
-                              ev.status === 'OVERDUE'
-                                ? 'bg-rose-50 text-rose-800 border-rose-300'
-                                : ev.status === 'DUE_SOON'
-                                ? 'bg-amber-50 text-amber-900 border-amber-300'
-                                : ev.status === 'COMPLETED'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                : 'bg-blue-50 text-blue-900 border-blue-200'
-                            }`}
-                            title={`${ev.institution_name} - ${ev.status}`}
-                          >
-                            {ev.institution_name}
-                          </div>
-                        ))}
-                        {dayEvents.length > 2 && (
-                          <div className="text-[9px] text-slate-400 font-semibold pl-1">
-                            +{dayEvents.length - 2} more...
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Day Preview Drawer/Modal */}
-              {selectedDaySchedules && (
-                <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-sm text-[#0B2240]">
-                      Visits on {calendarDate.toLocaleString('default', { month: 'short' })} {selectedDaySchedules.day}, {year}
-                    </h4>
-                    <button
-                      onClick={() => setSelectedDaySchedules(null)}
-                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {selectedDaySchedules.items.map((it) => (
-                      <div
-                        key={it.id}
-                        className="p-3 bg-white border border-slate-200 rounded-lg flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900">{it.institution_name}</span>
-                            {it.is_new_institution && (
-                              <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 text-[10px] font-bold">
-                                New Institution
-                              </span>
-                            )}
-                            <span className="font-mono text-slate-500 text-[11px]">{it.application_ref_no}</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
-                            Status: <strong className="text-slate-700">{it.status}</strong> • State: {it.state}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Link
-                            to={`/applications/${it.application_id}`}
-                            className="text-xs text-blue-700 font-semibold hover:underline"
-                          >
-                            View Case
-                          </Link>
-                          {canCompleteInspection && it.status !== 'COMPLETED' && (
-                            <button
-                              onClick={() => handleOpenCompleteModal(it)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold cursor-pointer"
-                            >
-                              Complete
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* =========================================================================
-              TAB 3: OVERDUE TAB
-             ========================================================================= */}
-          {activeTab === 'overdue' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl flex items-center justify-between text-xs text-rose-900">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-sm">Critical EVC SLA Breaches</h4>
-                    <p>
-                      These physical inspections have breached the prescribed AICTE statutory due window. Escalations are automatically routed to the Regional Head for committee re-assignment.
-                    </p>
-                  </div>
-                </div>
-                <span className="font-mono font-bold text-lg bg-rose-200 px-3 py-1 rounded-lg">
-                  {filteredSchedules.length} Breaches
-                </span>
-              </div>
-
-              {filteredSchedules.length === 0 ? (
-                <EmptyState
-                  title="Zero Overdue Inspections"
-                  description="All Expert Visit Committee inspections are currently operating within prescribed SLA windows."
-                />
-              ) : (
-                <div className="space-y-3">
-                  {filteredSchedules.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-5 bg-white border-2 border-rose-200 rounded-xl shadow-2xs space-y-3"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-xs font-bold text-rose-950">
-                              {item.application_ref_no || `App #${item.application_id}`}
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white shadow-2xs">
-                              Overdue by {item.days_overdue} days
-                            </span>
-                            {item.is_new_institution && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900">
-                                New Institution
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="font-bold text-sm text-slate-900 mt-1">
-                            {item.institution_name}
-                          </h3>
-                          <div className="text-xs text-slate-600 mt-0.5">
-                            {item.state} ({item.region_name} Directorate) • Statutory Due Date:{' '}
-                            <strong className="text-rose-700 font-mono">
-                              {new Date(item.due_date).toLocaleDateString()}
-                            </strong>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {canManageSchedule && (
-                            <button
-                              onClick={() => handleOpenRescheduleModal(item)}
-                              className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded text-xs font-bold border border-rose-300 transition-colors cursor-pointer"
-                            >
-                              Emergency Reschedule
-                            </button>
-                          )}
-                          {canCompleteInspection && (
-                            <button
-                              onClick={() => handleOpenCompleteModal(item)}
-                              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-2xs transition-colors cursor-pointer"
-                            >
-                              Complete Inspection
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Committee & Overdue Context */}
-                      <div className="p-3 bg-rose-50/40 rounded-lg text-xs space-y-1 text-slate-700">
-                        <div>
-                          <span className="font-medium text-slate-500">Scheduled Date: </span>
-                          <span className="font-mono">
-                            {item.scheduled_date ? new Date(item.scheduled_date).toLocaleString() : 'Not Set'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-slate-500">Assigned Committee: </span>
-                          {item.committee_members.length > 0 ? (
-                            <span>{item.committee_members.map((m) => m.name).join(', ')}</span>
-                          ) : (
-                            <span className="text-rose-700 font-semibold italic">Unassigned (Action Required)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* =========================================================================
-          MODAL 1: SCHEDULE VISIT WITH COMMITTEE MEMBER PICKER
-         ========================================================================= */}
-      {schedulingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-in fade-in duration-100">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-[#0B2240]">
-                <Calendar className="w-5 h-5 text-blue-900" />
-                <h3 className="font-bold text-base text-slate-900">Schedule EVC Physical Inspection</h3>
-              </div>
-              <button onClick={() => setSchedulingItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-xs space-y-1">
-              <div className="font-bold text-[#0B2240]">{schedulingItem.institution_name}</div>
-              <div className="text-slate-600 font-mono text-[11px]">{schedulingItem.application_ref_no} • {schedulingItem.state}</div>
-              <div className="text-blue-900 pt-1 font-medium">
-                Prescribed Statutory Due Date: <strong>{new Date(schedulingItem.due_date).toLocaleDateString()}</strong>
-              </div>
-            </div>
-
-            {/* Visit Date Picker */}
+      {/* ============================================================== */}
+      {/* MODAL 1: RESCHEDULE MODAL                                      */}
+      {/* ============================================================== */}
+      {isRescheduleModalOpen && selectedVisit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[1px]">
+          <div className="bg-white border border-[#E6E6E6] rounded-[8px] max-w-md w-full p-6 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Inspection Visit Date & Time:
-              </label>
-              <input
-                type="datetime-local"
-                value={scheduleDate}
-                onChange={(e) => setScheduleDate(e.target.value)}
-                className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-[#0B2240]"
-              />
+              <h3 className="text-base font-bold text-[#18181B]">Reschedule physical inspection</h3>
+              <p className="text-xs text-[#595959] mt-0.5">
+                {selectedVisit.institution_name} ({selectedVisit.application_ref_no})
+              </p>
             </div>
 
-            {/* Committee Member Picker */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Pick Committee Expert Members:
-              </label>
-              <div className="border border-slate-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-slate-100">
-                {committeeMembers.map((m) => {
-                  const isChecked = selectedCommitteeIds.includes(m.id);
-                  return (
-                    <label
-                      key={m.id}
-                      className={`flex items-center justify-between p-2.5 text-xs cursor-pointer hover:bg-slate-50 ${
-                        isChecked ? 'bg-blue-50/50' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedCommitteeIds([...selectedCommitteeIds, m.id]);
-                            } else {
-                              setSelectedCommitteeIds(selectedCommitteeIds.filter((id) => id !== m.id));
-                            }
-                          }}
-                          className="rounded text-[#0B2240]"
-                        />
-                        <div>
-                          <span className="font-bold text-slate-900 block">{m.name}</span>
-                          <span className="text-[11px] text-slate-500">{m.email} • {m.region_name}</span>
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
-                        {m.active_assignments} active
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                Selected: {selectedCommitteeIds.length} expert(s)
-              </div>
-            </div>
-
-            {scheduleError && (
-              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{scheduleError}</span>
+            {rescheduleError && (
+              <div className="p-3 bg-red-50 border border-[#E0202A] rounded-[8px] text-xs text-[#B5121A]">
+                {rescheduleError}
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setSchedulingItem(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleScheduleSubmit}
-                disabled={submittingSchedule}
-                className="px-5 py-2 bg-[#0B2240] hover:bg-[#07172C] disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-2"
-              >
-                {submittingSchedule ? 'Scheduling...' : 'Confirm EVC Schedule'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          MODAL 2: RESCHEDULE VISIT WITH MANDATORY REASON
-         ========================================================================= */}
-      {reschedulingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-in fade-in duration-100">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-amber-700">
-                <RotateCcw className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-base text-slate-900">Reschedule EVC Inspection</h3>
-              </div>
-              <button onClick={() => setReschedulingItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs space-y-1">
-              <div className="font-bold text-slate-900">{reschedulingItem.institution_name}</div>
-              <div className="text-slate-600 font-mono text-[11px]">{reschedulingItem.application_ref_no}</div>
-            </div>
-
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                New Inspection Visit Date:
+              <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+                New Inspection Date *
               </label>
               <input
                 type="datetime-local"
                 value={rescheduleDate}
                 onChange={(e) => setRescheduleDate(e.target.value)}
-                className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] focus:outline-none focus:border-[#18181B]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Mandatory Speaking Reason for Rescheduling <span className="text-rose-600">*</span>:
+              <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+                Mandatory Justification Reason *
               </label>
               <textarea
+                rows={3}
+                placeholder="State formal reason for postponing/rescheduling statutory visit..."
                 value={rescheduleReason}
                 onChange={(e) => setRescheduleReason(e.target.value)}
-                placeholder="State statutory reason (e.g. member unavailability, regional law & order, weather disruption)..."
-                rows={3}
-                className="w-full p-3 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs text-[#18181B] focus:outline-none focus:border-[#18181B] resize-none"
               />
             </div>
 
-            {rescheduleError && (
-              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{rescheduleError}</span>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setReschedulingItem(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold"
+            <div className="pt-3 border-t border-[#E6E6E6] flex items-center justify-end gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsRescheduleModalOpen(false)}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={submittingReschedule}
                 onClick={handleRescheduleSubmit}
-                disabled={submittingReschedule}
-                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-2"
               >
-                {submittingReschedule ? 'Rescheduling...' : 'Confirm Reschedule'}
-              </button>
+                Save
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* =========================================================================
-          MODAL 3: COMPLETE INSPECTION & AUTO-ADVANCE STAGE
-         ========================================================================= */}
-      {completingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-in fade-in duration-100">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2 text-emerald-700">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-base text-slate-900">Complete EVC Inspection Report</h3>
-              </div>
-              <button onClick={() => setCompletingItem(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Auto-Advancement Notice */}
-            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-1">
-              <div className="font-bold flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-emerald-700" />
-                Workflow Auto-Advancement Enabled
-              </div>
-              <p className="text-[11px] text-emerald-800">
-                Submitting this report marks EVC complete and automatically advances Application{' '}
-                <strong>{completingItem.application_ref_no}</strong> to the next stage in its template.
+      {/* ============================================================== */}
+      {/* MODAL 2: COMPLETE STAGE MODAL                                  */}
+      {/* ============================================================== */}
+      {isCompleteModalOpen && selectedVisit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[1px]">
+          <div className="bg-white border border-[#E6E6E6] rounded-[8px] max-w-lg w-full p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-[#18181B]">Complete EVC inspection</h3>
+              <p className="text-xs text-[#595959] mt-0.5">
+                Submit formal report to advance {selectedVisit.institution_name} to the next stage
               </p>
             </div>
 
-            {/* Checklist */}
-            <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-              <span className="font-bold text-slate-700 block uppercase text-[10px]">On-Site Norms Verification:</span>
-              <label className="flex items-center gap-2 text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={infraVerified}
-                  onChange={(e) => setInfraVerified(e.target.checked)}
-                  className="rounded text-emerald-600"
-                />
-                Campus Land, Built-up Area & Master Plan Verified
+            {completeError && (
+              <div className="p-3 bg-red-50 border border-[#E0202A] rounded-[8px] text-xs text-[#B5121A]">
+                {completeError}
+              </div>
+            )}
+
+            {/* Checklist Verifications */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider">
+                APH Norm Checklist Verification
               </label>
-              <label className="flex items-center gap-2 text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={facultyVerified}
-                  onChange={(e) => setFacultyVerified(e.target.checked)}
-                  className="rounded text-emerald-600"
-                />
-                Faculty Cadre Physically Present & Attendance Confirmed
-              </label>
-              <label className="flex items-center gap-2 text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={labsFunctional}
-                  onChange={(e) => setLabsFunctional(e.target.checked)}
-                  className="rounded text-emerald-600"
-                />
-                Computer Terminals & Core Laboratories Functional
-              </label>
+              <div className="space-y-2 p-3 bg-[#FAFAFA] border border-[#E6E6E6] rounded-[8px] text-xs">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={completeInfra}
+                    onChange={(e) => setCompleteInfra(e.target.checked)}
+                    className="accent-[#E0202A] w-4 h-4"
+                  />
+                  <span>Campus land and instructional area physically verified</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={completeFaculty}
+                    onChange={(e) => setCompleteFaculty(e.target.checked)}
+                    className="accent-[#E0202A] w-4 h-4"
+                  />
+                  <span>Faculty cadre, original credentials & presence verified</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={completeLabs}
+                    onChange={(e) => setCompleteLabs(e.target.checked)}
+                    className="accent-[#E0202A] w-4 h-4"
+                  />
+                  <span>Computing facilities, library & laboratories operational</span>
+                </label>
+              </div>
             </div>
 
             {/* Recommendation Select */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Committee Recommendation:
+              <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+                Committee Recommendation *
               </label>
               <select
-                value={recommendation}
-                onChange={(e) => setRecommendation(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold"
+                value={completeRecommendation}
+                onChange={(e) => setCompleteRecommendation(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs text-[#18181B] focus:outline-none focus:border-[#18181B]"
               >
-                <option value="RECOMMENDED">RECOMMENDED for Approval (EoA)</option>
-                <option value="DEFICIENT_HEARING">DEFICIENT - Refer to Standing Hearing Committee</option>
-                <option value="NOT_RECOMMENDED">NOT RECOMMENDED (Critical Infrastructure Missing)</option>
+                <option value="RECOMMENDED">RECOMMENDED (Meets all statutory norms)</option>
+                <option value="DEFICIENT_HEARING">DEFICIENT_HEARING (Refer to Standing Hearing Committee)</option>
+                <option value="NOT_RECOMMENDED">NOT_RECOMMENDED (Critical non-compliances flagged)</option>
               </select>
             </div>
 
-            {/* Report Summary */}
+            {/* Report Document URL / File */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Formal Committee Inspection Findings & Observations <span className="text-rose-600">*</span>:
+              <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+                Signed Inspection Report Evidence URL
               </label>
-              <textarea
-                value={reportSummary}
-                onChange={(e) => setReportSummary(e.target.value)}
-                placeholder="Record geotagged site verification observations, equipment adequacy, and compliance findings..."
-                rows={4}
-                className="w-full p-3 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500"
+              <input
+                type="text"
+                placeholder="https://storage.aicte.gov.in/evc/reports/sample_report.pdf"
+                value={completeReportUrl}
+                onChange={(e) => setCompleteReportUrl(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs text-[#18181B] focus:outline-none focus:border-[#18181B]"
               />
             </div>
 
-            {completeError && (
-              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{completeError}</span>
-              </div>
-            )}
+            {/* Remarks / Summary */}
+            <div>
+              <label className="block text-xs font-semibold text-[#18181B] uppercase tracking-wider mb-2">
+                Inspection Findings & Summary *
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Summarize key observations, building approvals, lab equipment, and committee consensus..."
+                value={completeRemarks}
+                onChange={(e) => setCompleteRemarks(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs text-[#18181B] focus:outline-none focus:border-[#18181B] resize-none"
+              />
+            </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setCompletingItem(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold"
+            <div className="pt-3 border-t border-[#E6E6E6] flex items-center justify-end gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsCompleteModalOpen(false)}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={submittingComplete}
                 onClick={handleCompleteSubmit}
-                disabled={submittingComplete}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-2"
               >
-                {submittingComplete ? 'Advancing Stage...' : 'Submit & Advance Application'}
-              </button>
+                Complete stage
+              </Button>
             </div>
           </div>
         </div>
@@ -1192,3 +1514,5 @@ export const EVCPage: React.FC = () => {
     </div>
   );
 };
+
+export default EVCPage;

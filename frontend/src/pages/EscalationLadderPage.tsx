@@ -3,6 +3,7 @@ import { Flame, Clock, ShieldAlert, Save, CheckCircle2, AlertTriangle, ArrowRigh
 import { apiRequest } from '../api/client';
 import { EscalationLadder } from '../types';
 import { LoadingState, ErrorState } from '../components/States';
+import { Button } from '../components/ui/Button';
 
 export const EscalationLadderPage: React.FC = () => {
   const [ladders, setLadders] = useState<EscalationLadder[]>([]);
@@ -56,40 +57,40 @@ export const EscalationLadderPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Rule #3 Banner */}
-      <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="p-4 bg-[#FAFAFA] border border-[#E6E6E6] rounded-[8px] flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-orange-600" />
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+            <Flame className="w-5 h-5 text-[#111111]" />
+            <h2 className="text-lg font-bold text-[#111111] tracking-tight">
               Rule #3: Configurable Escalation Ladders & Reminder Offsets
             </h2>
           </div>
-          <p className="text-xs text-slate-600 mt-1">
+          <p className="text-xs text-[#595959] mt-1">
             APScheduler continuously monitors pending applications. When deadlines approach or lapse, configurable reminder offsets and escalation ladders are triggered automatically.
           </p>
         </div>
-        <span className="px-2.5 py-1 bg-orange-600 text-white rounded text-xs font-semibold self-start md:self-auto">
+        <span className="px-2.5 py-1 bg-[#18181B] text-white rounded-[6px] text-xs font-semibold self-start md:self-auto">
           Active SLA Engine
         </span>
       </div>
 
       {successMsg && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="p-3 bg-[#F4F4F5] border border-[#E6E6E6] rounded-[8px] text-xs text-[#111111] flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-[#111111] shrink-0" />
           {successMsg}
         </div>
       )}
 
       {/* Escalation Ladders Table */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+      <div className="bg-white p-5 rounded-[8px] border border-[#E6E6E6] space-y-4">
         <div>
-          <h3 className="font-bold text-sm text-slate-900">Stage Escalation Ladder Definitions</h3>
-          <p className="text-xs text-slate-500">Configure reminder offsets and escalation targets per stage</p>
+          <h3 className="font-bold text-sm text-[#111111]">Stage Escalation Ladder Definitions</h3>
+          <p className="text-xs text-[#595959]">Configure reminder offsets and escalation targets per stage</p>
         </div>
 
-        <div className="border border-slate-200 rounded-lg overflow-hidden">
+        <div className="border border-[#E6E6E6] rounded-[8px] overflow-hidden">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px]">
+            <thead className="bg-[#FAFAFA] border-b border-[#E6E6E6] text-[#595959] font-semibold uppercase text-[11px]">
               <tr>
                 <th className="py-2.5 px-3">Stage</th>
                 <th className="py-2.5 px-3">Max SLA Window</th>
@@ -99,10 +100,10 @@ export const EscalationLadderPage: React.FC = () => {
                 <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[#E6E6E6]">
               {ladders.map((ladder, idx) => (
-                <tr key={ladder.id} className="hover:bg-slate-50/60">
-                  <td className="py-3 px-3 font-semibold text-slate-900">
+                <tr key={ladder.id} className="hover:bg-[#FAFAFA]">
+                  <td className="py-3 px-3 font-semibold text-[#111111]">
                     {ladder.stage_name || `Stage #${ladder.stage_id}`}
                   </td>
                   <td className="py-3 px-3">
@@ -116,9 +117,9 @@ export const EscalationLadderPage: React.FC = () => {
                           updated[idx].sla_hours = parseInt(e.target.value) || 0;
                           setLadders(updated);
                         }}
-                        className="p-1 border border-slate-300 rounded text-xs w-20 font-bold text-slate-800"
+                        className="p-1 border border-[#E6E6E6] rounded-[6px] text-xs w-20 font-bold text-[#111111] bg-white focus:outline-none focus:border-[#111111]"
                       />
-                      <span className="text-slate-500 text-[11px]">hours</span>
+                      <span className="text-[#595959] text-[11px]">hours</span>
                     </div>
                   </td>
                   <td className="py-3 px-3">
@@ -132,9 +133,9 @@ export const EscalationLadderPage: React.FC = () => {
                           updated[idx].first_reminder_hours_before = parseInt(e.target.value) || 0;
                           setLadders(updated);
                         }}
-                        className="p-1 border border-slate-300 rounded text-xs w-20 text-slate-700"
+                        className="p-1 border border-[#E6E6E6] rounded-[6px] text-xs w-20 text-[#111111] bg-white focus:outline-none focus:border-[#111111]"
                       />
-                      <span className="text-slate-500 text-[11px]">hours before</span>
+                      <span className="text-[#595959] text-[11px]">hours before</span>
                     </div>
                   </td>
                   <td className="py-3 px-3">
@@ -148,9 +149,9 @@ export const EscalationLadderPage: React.FC = () => {
                           updated[idx].second_reminder_hours_before = parseInt(e.target.value) || 0;
                           setLadders(updated);
                         }}
-                        className="p-1 border border-slate-300 rounded text-xs w-20 text-slate-700"
+                        className="p-1 border border-[#E6E6E6] rounded-[6px] text-xs w-20 text-[#111111] bg-white focus:outline-none focus:border-[#111111]"
                       />
-                      <span className="text-slate-500 text-[11px]">hours before</span>
+                      <span className="text-[#595959] text-[11px]">hours before</span>
                     </div>
                   </td>
                   <td className="py-3 px-3">
@@ -161,7 +162,7 @@ export const EscalationLadderPage: React.FC = () => {
                         updated[idx].escalate_to_role = e.target.value as any;
                         setLadders(updated);
                       }}
-                      className="p-1.5 border border-slate-300 rounded text-xs font-semibold text-red-800 bg-red-50/50"
+                      className="p-1.5 border border-[#E0202A] rounded-[6px] text-xs font-semibold text-[#B5121A] bg-white"
                     >
                       <option value="REGIONAL_OFFICER">REGIONAL_OFFICER (Regional Director)</option>
                       <option value="COMPETENT_AUTHORITY">COMPETENT_AUTHORITY (Member Secretary)</option>
@@ -169,14 +170,7 @@ export const EscalationLadderPage: React.FC = () => {
                     </select>
                   </td>
                   <td className="py-3 px-3 text-right">
-                    <button
-                      onClick={() => handleUpdate(ladder)}
-                      disabled={savingId === ladder.id}
-                      className="px-2.5 py-1 bg-[#0B2240] hover:bg-[#07172C] text-white rounded text-[11px] font-semibold flex items-center gap-1 ml-auto cursor-pointer"
-                    >
-                      <Save className="w-3 h-3" />
-                      Save
-                    </button>
+                    <Button variant="secondary" size="sm" loading={savingId === ladder.id} onClick={() => handleUpdate(ladder)}>Save</Button>
                   </td>
                 </tr>
               ))}

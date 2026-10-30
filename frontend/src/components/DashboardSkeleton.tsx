@@ -2,63 +2,47 @@ import React from 'react';
 
 export const DashboardSkeleton: React.FC = () => {
   return (
-    <div className="space-y-6 animate-pulse">
-      {/* Top Banner Skeleton */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-2">
-          <div className="h-6 w-80 bg-slate-200 rounded"></div>
-          <div className="h-4 w-96 bg-slate-100 rounded"></div>
-        </div>
-        <div className="h-8 w-48 bg-slate-200 rounded-full"></div>
-      </div>
-
-      {/* Filter Bar Skeleton */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex gap-2">
-          <div className="h-8 w-36 bg-slate-200 rounded-lg"></div>
-          <div className="h-8 w-36 bg-slate-200 rounded-lg"></div>
-          <div className="h-8 w-36 bg-slate-200 rounded-lg"></div>
-        </div>
-        <div className="h-8 w-32 bg-slate-200 rounded-lg"></div>
-      </div>
-
-      {/* KPI Stats Grid Skeleton */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-            <div className="h-3 w-20 bg-slate-200 rounded"></div>
-            <div className="h-8 w-14 bg-slate-300 rounded"></div>
-            <div className="h-2.5 w-24 bg-slate-100 rounded"></div>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts Row Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="h-4 w-48 bg-slate-200 rounded"></div>
-          <div className="h-3 w-64 bg-slate-100 rounded"></div>
-          <div className="h-64 bg-slate-100 rounded-lg"></div>
-        </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="h-4 w-48 bg-slate-200 rounded"></div>
-          <div className="h-3 w-64 bg-slate-100 rounded"></div>
-          <div className="h-64 bg-slate-100 rounded-lg"></div>
+    <div className="space-y-8 font-sans">
+      {/* Hero Skeleton */}
+      <div className="pt-2 pb-6 space-y-3">
+        <div className="h-10 w-96 skeleton-shimmer rounded-[8px]" />
+        <div className="h-4 w-72 skeleton-shimmer rounded-[8px]" />
+        <div className="flex gap-3 pt-4">
+          <div className="h-10 w-32 skeleton-shimmer rounded-[8px]" />
+          <div className="h-10 w-28 skeleton-shimmer rounded-[8px]" />
         </div>
       </div>
 
-      {/* Tables Row Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="h-4 w-40 bg-slate-200 rounded"></div>
-          <div className="h-40 bg-slate-100 rounded-lg"></div>
+      <div className="border-b border-[#E6E6E6]" />
+
+      {/* Stat Cards Skeleton */}
+      <div className="space-y-3">
+        <div className="h-4 w-20 skeleton-shimmer rounded-[8px]" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="p-6 bg-white border border-[#E6E6E6] rounded-[8px] space-y-3 shadow-subtle">
+              <div className="h-8 w-16 skeleton-shimmer rounded-[8px]" />
+              <div className="h-4 w-28 skeleton-shimmer rounded-[8px]" />
+            </div>
+          ))}
         </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="h-4 w-40 bg-slate-200 rounded"></div>
-          <div className="h-40 bg-slate-100 rounded-lg"></div>
+      </div>
+
+      {/* Needs Attention Skeleton */}
+      <div className="space-y-3 pt-4">
+        <div className="h-4 w-32 skeleton-shimmer rounded-[8px]" />
+        <div className="border-t border-[#E6E6E6] divide-y divide-[#E6E6E6]">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="py-4 flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="h-4 w-60 skeleton-shimmer rounded-[8px]" />
+                <div className="h-3 w-40 skeleton-shimmer rounded-[8px]" />
+              </div>
+              <div className="h-4 w-24 skeleton-shimmer rounded-[8px]" />
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 };
-

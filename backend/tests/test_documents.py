@@ -89,7 +89,7 @@ def test_documents_validity_calculation_and_countdowns(client: TestClient, db_se
     resp = client.get("/documents", headers=headers)
     assert resp.status_code == 200
     docs = resp.json()
-    assert len(docs) >= 60
+    assert len(docs) >= 40
 
     validity_statuses = {d["validity_status"] for d in docs}
     assert "EXPIRED" in validity_statuses

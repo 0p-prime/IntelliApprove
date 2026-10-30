@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Button } from './ui/Button';
 import {
   ShieldCheck,
   GitBranch,
@@ -21,8 +22,6 @@ export interface TourStep {
   subtitle: string;
   badge: string;
   icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
   description: string;
   keyPoints: string[];
 }
@@ -30,30 +29,26 @@ export interface TourStep {
 const TOUR_STEPS: TourStep[] = [
   {
     title: 'Welcome to IntelliApprove',
-    subtitle: 'AICTE Regulatory Workflow & Compliance Automation Platform',
-    badge: 'SIH 2026 PS 26262',
+    subtitle: 'Approval Workflow Automation and Compliance Management',
+    badge: 'System Walkthrough',
     icon: Compass,
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-900',
     description:
-      'IntelliApprove automates, monitors, and enforces regulatory compliance across all technical and management institutions in India, strictly respecting AICTE Chapter I & II Approval Process Handbook (APH) norms.',
+      'IntelliApprove automates, monitors, and enforces regulatory compliance across all technical and management institutions in India, strictly respecting statutory Approval Process Handbook norms.',
     keyPoints: [
       'Comprehensive pipeline covering 150+ seeded institutions and applications',
-      'Unified tracking across 8 AICTE Regional Directorates',
+      'Unified tracking across 8 Regional Directorates',
       'Dual-language interface with instant English / Hindi toggle'
     ]
   },
   {
     title: 'Role-Based Access Control (RBAC)',
     subtitle: 'Multi-Role Scoping & Quick Persona Switcher for Evaluation',
-    badge: 'Non-Negotiable Rule #5',
+    badge: 'Strict Governance',
     icon: ShieldCheck,
-    iconBg: 'bg-rose-100',
-    iconColor: 'text-rose-800',
     description:
       'Every transaction is strictly scoped by administrative persona. Institutions only access their own files; Regional Officers oversee their jurisdiction; Bureau Officers govern nationwide approvals.',
     keyPoints: [
-      'Judges can use the "Switch Role" dropdown in the top bar to test data scoping on the fly',
+      'Evaluators can use the "Switch Role" menu in the bottom-left sidebar to test data scoping on the fly',
       '6 distinct personas: Admin, Bureau Officer, Regional Head, Regional Officer, EVC Member, Institution',
       'Login rate limiting and 7-day refresh token rotation'
     ]
@@ -61,12 +56,10 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: 'Approval Workflow Engine',
     subtitle: '5 Configurable Route Templates with Strict Human Oversight Gate',
-    badge: 'Non-Negotiable Rule #2 & #3',
+    badge: 'Workflow Integrity',
     icon: GitBranch,
-    iconBg: 'bg-indigo-100',
-    iconColor: 'text-indigo-800',
     description:
-      'Applications automatically transition through dynamic route templates. In compliance with Non-Negotiable Rule #2, the system NEVER auto-approves or auto-rejects cases; all final decisions require authorized human sign-off with speaking remarks.',
+      'Applications automatically transition through dynamic route templates. In compliance with strict regulations, the system NEVER auto-approves or auto-rejects cases; all final decisions require authorized human sign-off with speaking remarks.',
     keyPoints: [
       'Dynamic templates: Scrutiny Only, Scrutiny + EVC, EVC + SAC/SHC, EVC Only, Full 5-Stage Route',
       'Mandatory-reason return/revert flow for deficiency clarifications with status "RETURNED"',
@@ -76,10 +69,8 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: 'Explainable Delay Risk Score',
     subtitle: 'Transparent 5-Factor Predictive Bottleneck Analysis',
-    badge: 'Differentiating Feature #1',
+    badge: 'Predictive Intelligence',
     icon: AlertTriangle,
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-800',
     description:
       'Predicts pendency risk using an explainable 0–100 weighted formula rather than an opaque black box. Clicking any risk badge opens a transparent breakdown of contributing factors.',
     keyPoints: [
@@ -93,8 +84,6 @@ const TOUR_STEPS: TourStep[] = [
     subtitle: 'Physical Campus Inspections with Priority Scheduling',
     badge: 'Field Inspection Engine',
     icon: Users,
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-800',
     description:
       'Automatically creates queued inspection records when preliminary scrutiny completes. Prioritizes new institutions with shorter turnaround windows.',
     keyPoints: [
@@ -108,8 +97,6 @@ const TOUR_STEPS: TourStep[] = [
     subtitle: 'Post-Approval Condition Compliance & Institution Scorecards',
     badge: 'Legal Accountability',
     icon: FileCheck2,
-    iconBg: 'bg-teal-100',
-    iconColor: 'text-teal-800',
     description:
       'Tracks statutory undertakings issued during conditional approvals. Institutions upload evidence proofs with SHA-256 cryptographic hashing to prevent document tampering.',
     keyPoints: [
@@ -121,10 +108,8 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: 'Document Validity & Lease OCR Assist',
     subtitle: 'Automated Deed Expiry Monitoring & AI Pre-Fill',
-    badge: 'Differentiating Feature #3',
+    badge: 'Tenure Vigilance',
     icon: FolderClosed,
-    iconBg: 'bg-cyan-100',
-    iconColor: 'text-cyan-800',
     description:
       'Monitors institutional land leases, building safety certificates, and fire NOCs. Upon deed upload, Lease OCR Assist parses tenure clauses to pre-fill expiry dates with human verification confirmation.',
     keyPoints: [
@@ -136,10 +121,8 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: 'Cryptographic SHA-256 Audit Trail',
     subtitle: 'Tamper-Evident Merkle-Linked Government Ledger',
-    badge: 'Non-Negotiable Rule #1',
+    badge: 'Audit Transparency',
     icon: History,
-    iconBg: 'bg-purple-100',
-    iconColor: 'text-purple-800',
     description:
       'Every single state change, login, report export, and webhook writes a cryptographically linked block: hash = SHA-256(prev_hash + canonical_json(row)).',
     keyPoints: [
@@ -153,12 +136,10 @@ const TOUR_STEPS: TourStep[] = [
     subtitle: 'Simulate Days/Weeks to Test Alerts & Automated Escalations',
     badge: 'Evaluation Tool',
     icon: Clock,
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-800',
     description:
-      'Judges can fast-forward simulated system time (+7 Days, +30 Days, +90 Days) to witness automated SLA warnings, email notifications, and Level 1 -> Level 2 -> Level 3 escalations.',
+      'Evaluators can fast-forward simulated system time (+7 Days, +30 Days, +90 Days) to witness automated SLA warnings, email notifications, and Level 1 -> Level 2 -> Level 3 escalations.',
     keyPoints: [
-      'Accessible anytime via the "Simulated Clock" widget in the top navigation bar',
+      'Accessible anytime via the "Sim Time" widget in the top navigation bar',
       'Instantly triggers the automated rules evaluation engine upon time advance',
       'One-click "Reset to Today" button restores real-world clock'
     ]
@@ -166,12 +147,10 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: 'Statutory AI Assistant & Bridge',
     subtitle: 'Role-Scoped Natural Language Queries & Legacy Portal Sync',
-    badge: 'Differentiating Feature #2 & #4',
+    badge: 'Assistant & Bridge',
     icon: Sparkles,
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-800',
     description:
-      'Officers can ask natural-language questions and auto-draft deficiency notices. Connects with the legacy AICTE approval portal via HMAC-SHA256 verified webhooks.',
+      'Officers can ask natural-language questions and auto-draft deficiency notices. Connects with external approval databases via verified webhooks.',
     keyPoints: [
       'Floating AI Assistant available globally via the sparkles button in the bottom right',
       'Drafts statutory notices clearly watermarked [AI Draft — Requires Official Review]',
@@ -208,61 +187,52 @@ export const GuidedTourModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Tricolor Header Accent */}
-        <div className="tricolor-bar" />
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-in fade-in duration-150">
+      <div className="bg-white rounded-[8px] max-w-xl w-full border border-[#E6E6E6] overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Top Bar */}
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#0B2240] text-amber-300 font-mono">
-              Guided Tour • Step {currentStep + 1} of {TOUR_STEPS.length}
+        <div className="px-6 py-4 bg-white border-b border-[#E6E6E6] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-[4px] bg-[#18181B] text-white font-mono">
+              Step {currentStep + 1} of {TOUR_STEPS.length}
             </span>
-            <span className="text-xs text-slate-500 font-medium">
-              IntelliApprove Walkthrough
+            <span className="text-xs text-[#595959] font-medium">
+              IntelliApprove Guided Tour
             </span>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1 rounded-md transition-colors cursor-pointer"
-            title="Exit Tour"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <Button variant="quiet" size="icon" aria-label="Close" onClick={onClose}><X className="w-5 h-5" /></Button>
         </div>
 
         {/* Modal Body */}
         <div className="p-6 space-y-4 overflow-y-auto">
           <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-2xl ${step.iconBg} ${step.iconColor} shrink-0 shadow-inner`}>
+            <div className="p-3 rounded-[8px] bg-[#F4F4F5] text-[#111111] border border-[#E6E6E6] shrink-0">
               <Icon className="w-7 h-7" />
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#111111] bg-[#F4F4F5] px-2 py-0.5 rounded border border-[#E6E6E6]">
                 {step.badge}
               </span>
-              <h3 className="text-lg font-bold text-slate-900 mt-1">
+              <h3 className="text-lg font-bold text-[#111111] mt-1">
                 {step.title}
               </h3>
-              <p className="text-xs font-semibold text-blue-900 mt-0.5">
+              <p className="text-xs font-medium text-[#595959] mt-0.5">
                 {step.subtitle}
               </p>
             </div>
           </div>
 
-          <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">
+          <p className="text-xs text-[#111111] leading-relaxed bg-[#F4F4F5] p-3.5 rounded-[8px] border border-[#E6E6E6]">
             {step.description}
           </p>
 
           <div className="space-y-2 pt-1">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#595959]">
               Key Capabilities:
             </div>
             <div className="space-y-1.5">
               {step.keyPoints.map((point, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-xs text-slate-700">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div key={idx} className="flex items-start gap-2 text-xs text-[#111111]">
+                  <CheckCircle2 className="w-4 h-4 text-[#111111] shrink-0 mt-0.5" />
                   <span>{point}</span>
                 </div>
               ))}
@@ -271,19 +241,20 @@ export const GuidedTourModal: React.FC<{
         </div>
 
         {/* Modal Footer with Progress Dots & Action Buttons */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+        <div className="px-6 py-4 bg-[#F4F4F5] border-t border-[#E6E6E6] flex items-center justify-between gap-3">
           {/* Progress Indicators */}
           <div className="flex items-center gap-1.5">
             {TOUR_STEPS.map((_, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => setCurrentStep(i)}
-                className={`h-2 rounded-full transition-all cursor-pointer ${
+                aria-label={`Go to tour step ${i + 1}`}
+                className={`h-2 rounded-full transition-all cursor-pointer border-0 p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E0202A] ${
                   i === currentStep
-                    ? 'w-6 bg-[#0B2240]'
-                    : 'w-2 bg-slate-300 hover:bg-slate-400'
+                    ? 'w-6 bg-[#18181B]'
+                    : 'w-2 bg-[#D4D4D8] hover:bg-[#A1A1AA]'
                 }`}
-                title={`Go to step ${i + 1}`}
               />
             ))}
           </div>
@@ -291,25 +262,12 @@ export const GuidedTourModal: React.FC<{
           {/* Navigation Controls */}
           <div className="flex items-center gap-2">
             {!isFirst && (
-              <button
-                onClick={handlePrev}
-                className="px-3.5 py-1.5 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                Previous
-              </button>
+              <Button variant="secondary" onClick={handlePrev}>Previous</Button>
             )}
-            <button
-              onClick={handleNext}
-              className="px-4 py-1.5 bg-[#0B2240] hover:bg-[#12335C] text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer"
-            >
-              <span>{isLast ? 'Complete Tour' : 'Next Step'}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <Button variant="primary" size="sm" onClick={handleNext}>{isLast ? "Complete tour" : "Next"}</Button>
           </div>
         </div>
       </div>
     </div>
   );
 };
-

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Sparkles,
   Send,
@@ -8,15 +9,11 @@ import {
   Copy,
   Check,
   AlertTriangle,
-  Building2,
-  Clock,
-  ArrowRight,
-  ShieldCheck,
-  FileText
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { Button } from './ui/Button';
 
 interface ChatMessage {
   id: string;
@@ -48,7 +45,7 @@ export const AIAssistantWidget: React.FC = () => {
     {
       id: 'welcome',
       sender: 'assistant',
-      text: `Namaste! I am the AICTE Statutory Governance Assistant. Ask me about overdue inspections, expiring document validity, high-risk delay cases, or request a drafted deficiency notice. All queries are strictly role-scoped to your clearance (${user?.role || 'User'}).`,
+      text: `Hello! I am your Statutory Governance Assistant. Ask me about overdue inspections, expiring document validity, high-risk delay cases, or request a drafted deficiency notice. All queries are strictly role-scoped to your clearance (${user?.role || 'User'}).`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -113,6 +110,61 @@ export const AIAssistantWidget: React.FC = () => {
     }
   };
 
+  const triggerButtonRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef<boolean>(false);
+  const [hasOtherOverlay, setHasOtherOverlay] = useState<boolean>(false);
+  const [isTapped, setIsTapped] = useState<boolean>(false);
+  const tapTimerRef = useRef<number | null>(null);
+
+  const handlePointerDown = () => {
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    setIsTapped(true);
+  };
+
+  const handlePointerUp = () => {
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
+    tapTimerRef.current = window.setTimeout(() => {
+      setIsTapped(false);
+      tapTimerRef.current = null;
+    }, 250);
+  };
+
+  // Return focus to trigger button when closed
+  useEffect(() => {
+    if (wasOpenRef.current && !isOpen) {
+      setTimeout(() => {
+        triggerButtonRef.current?.focus();
+      }, 50);
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  // Hide button while any dialog, drawer, or modal is open in the app
+  useEffect(() => {
+    const checkOverlays = () => {
+      const overlays = document.querySelectorAll(
+        '[role="dialog"]:not(#ai-assistant-drawer), [aria-modal="true"]:not(#ai-assistant-drawer), [data-overlay="true"], .fixed.inset-0.z-50:not(#ai-assistant-backdrop)'
+      );
+      setHasOtherOverlay(overlays.length > 0);
+    };
+
+    checkOverlays();
+    const observer = new MutationObserver(checkOverlays);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   const handleCopyDraft = (content: string, id: string) => {
     navigator.clipboard.writeText(content);
     setCopiedDraftId(id);
@@ -121,58 +173,105 @@ export const AIAssistantWidget: React.FC = () => {
 
   return (
     <>
-      {/* Floating Action Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-40 p-3.5 bg-gradient-to-r from-[#0B2240] to-blue-900 text-white rounded-full shadow-2xl hover:shadow-blue-900/40 hover:scale-105 transition-all flex items-center gap-2 cursor-pointer border border-blue-400/40 group"
-        title="Open AICTE Natural Language Assistant"
-      >
-        <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
-        <span className="text-xs font-bold pr-1 hidden sm:inline">Ask AI Assistant</span>
-        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-      </button>
+      {/* Floating Action Button (Ask AI Pill) rendered via Portal into document.body */}
+      {typeof document !== 'undefined' &&
+        !isOpen &&
+        !hasOtherOverlay &&
+        createPortal(
+          <button
+            ref={triggerButtonRef}
+            type="button"
+            onClick={() => setIsOpen(true)}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onPointerLeave={() => {
+              if (isTapped) handlePointerUp();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                handlePointerDown();
+                handlePointerUp();
+              }
+            }}
+            aria-label="Ask AI"
+            title="Ask AI"
+            className={`ask-ai-floating-btn ${isTapped ? 'is-tapped' : ''}`}
+            style={{
+              position: 'fixed',
+              top: 'auto',
+              left: 'auto',
+              right: '24px',
+              bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+              zIndex: 40,
+            }}
+          >
+            <Sparkles className="w-4 h-4 text-white shrink-0" />
+            <span className="font-semibold text-sm text-white select-none">Ask AI</span>
+          </button>,
+          document.body
+        )}
 
-      {/* Slide-over Drawer / Modal Widget */}
-      {isOpen && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
+      {/* Slide-over Drawer / Modal Widget rendered via Portal into document.body */}
+      {typeof document !== 'undefined' &&
+        isOpen &&
+        createPortal(
+          <>
+            {/* Backdrop */}
+            <div
+              id="ai-assistant-backdrop"
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] animate-backdrop-in"
+              onClick={() => setIsOpen(false)}
+              aria-hidden="true"
+            />
+
+            <div
+              id="ai-assistant-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Statutory Governance Assistant"
+              className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] bg-white border-l border-[#E6E6E6] flex flex-col shadow-2xl animate-drawer-in"
+            >
           {/* Header */}
-          <div className="p-4 gov-header-gradient text-white flex items-center justify-between shrink-0 shadow-md">
+          <div className="p-4 bg-white border-b border-[#E6E6E6] text-[#111111] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-400/20 border border-amber-300 flex items-center justify-center text-amber-300">
-                <Bot className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-[8px] bg-[#F4F4F5] border border-[#E6E6E6] flex items-center justify-center text-[#111111]">
+                <Bot className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="font-bold text-sm tracking-tight flex items-center gap-1.5">
-                  AICTE Statutory Assistant
-                  <span className="text-[9px] px-1.5 py-0.2 bg-amber-400 text-slate-900 rounded font-mono font-bold">
+                <h3 className="font-bold text-sm tracking-tight flex items-center gap-1.5 text-[#111111]">
+                  Statutory Governance Assistant
+                  <span className="text-[9px] px-1.5 py-0.5 bg-[#F4F4F5] border border-[#E6E6E6] text-[#111111] rounded font-mono font-semibold">
                     RBAC Scoped
                   </span>
                 </h3>
-                <p className="text-[10px] text-blue-100/90">
-                  Role: {user?.role} • Model: Verified Service Queries (No Raw SQL)
+                <p className="text-[11px] text-[#595959]">
+                  Role: {user?.role} • Verified Service Clearance
                 </p>
               </div>
             </div>
 
-            <button
+            <Button
+              size="icon"
+              aria-label="Close assistant"
               onClick={() => setIsOpen(false)}
-              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
           {/* Quick Suggestion Chips */}
-          <div className="p-2.5 bg-slate-50 border-b border-slate-200 shrink-0 overflow-x-auto flex gap-1.5 scrollbar-none">
+          <div className="p-2.5 bg-[#F4F4F5] border-b border-[#E6E6E6] shrink-0 overflow-x-auto flex gap-1.5 scrollbar-none">
             {SAMPLE_PROMPTS.map((prompt, idx) => (
-              <button
+              <Button
                 key={idx}
+                size="sm"
                 onClick={() => handleSendMessage(prompt)}
                 disabled={loading}
-                className="px-2.5 py-1 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-900 text-[11px] rounded-full whitespace-nowrap transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                className="whitespace-nowrap shrink-0 text-[11px]"
               >
                 {prompt}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -184,17 +283,16 @@ export const AIAssistantWidget: React.FC = () => {
                 className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.sender === 'assistant' && (
-                  <div className="w-6 h-6 rounded-md bg-[#0B2240] text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-6 h-6 rounded-[6px] bg-[#F4F4F5] border border-[#E6E6E6] text-[#111111] flex items-center justify-center shrink-0 mt-0.5">
                     <Bot className="w-3.5 h-3.5" />
                   </div>
                 )}
 
                 <div
-                  className={`max-w-[85%] rounded-2xl p-3.5 space-y-2 shadow-2xs ${
-                    msg.sender === 'user'
-                      ? 'bg-[#0B2240] text-white rounded-br-xs'
-                      : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-bl-xs'
-                  }`}
+                  className={`max-w-[85%] rounded-[8px] p-3.5 space-y-2 ${msg.sender === 'user'
+                    ? 'bg-[#18181B] text-white'
+                    : 'bg-[#F4F4F5] border border-[#E6E6E6] text-[#111111]'
+                    }`}
                 >
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
 
@@ -204,36 +302,36 @@ export const AIAssistantWidget: React.FC = () => {
                       {msg.data.slice(0, 4).map((item: any, iIdx: number) => (
                         <div
                           key={iIdx}
-                          className="p-2 bg-white rounded-lg border border-slate-200 text-[11px] space-y-0.5"
+                          className="p-2 bg-white rounded-[6px] border border-[#E6E6E6] text-[11px] space-y-0.5"
                         >
-                          <div className="flex items-center justify-between font-bold text-slate-900">
+                          <div className="flex items-center justify-between font-bold text-[#111111]">
                             <span>{item.ref_no || item.doc_type || item.institution_name}</span>
                             {item.status && (
-                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-100 text-slate-700 font-mono">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#F4F4F5] text-[#111111] font-mono">
                                 {item.status}
                               </span>
                             )}
                             {item.risk_score !== undefined && (
-                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-rose-100 text-rose-800 font-bold font-mono">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] border border-[#E0202A] text-[#B5121A] font-bold font-mono">
                                 Risk: {item.risk_score}
                               </span>
                             )}
                           </div>
                           {item.institution_name && (
-                            <div className="text-slate-600 truncate">{item.institution_name}</div>
+                            <div className="text-[#595959] truncate">{item.institution_name}</div>
                           )}
                           {item.days_overdue !== undefined && (
-                            <div className="text-red-700 font-semibold text-[10px]">
+                            <div className="text-[#B5121A] font-semibold text-[10px]">
                               Overdue by {item.days_overdue} days
                             </div>
                           )}
                           {item.days_remaining !== undefined && (
-                            <div className="text-amber-700 text-[10px]">
+                            <div className="text-[#111111] font-medium text-[10px]">
                               Expires in {item.days_remaining} days ({item.expiry_date})
                             </div>
                           )}
                           {item.primary_driver && (
-                            <div className="text-slate-500 text-[10px]">
+                            <div className="text-[#595959] text-[10px]">
                               Driver: {item.primary_driver}
                             </div>
                           )}
@@ -242,44 +340,44 @@ export const AIAssistantWidget: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Render Drafted Notice with Mandatory Human Review Watermark */}
+                  {/* Render Drafted Notice */}
                   {msg.draftContent && (
                     <div className="pt-2 space-y-2">
-                      <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-[10px] font-bold flex items-center justify-between">
+                      <div className="p-2 bg-white border border-[#E0202A] rounded-[6px] text-[#B5121A] text-[10px] font-bold flex items-center justify-between">
                         <span className="flex items-center gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                          AI DRAFT — REQUIRES MANDATORY OFFICIAL HUMAN REVIEW
+                          <AlertTriangle className="w-3.5 h-3.5 text-[#B5121A]" />
+                          AI DRAFT — REQUIRES OFFICIAL REVIEW
                         </span>
-                        <button
+                        <Button
+                          size="sm"
                           onClick={() => handleCopyDraft(msg.draftContent || '', msg.id)}
-                          className="px-2 py-0.5 bg-white border border-amber-300 rounded text-[10px] font-semibold text-amber-800 hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
+                          className="h-7 min-h-7 px-2.5 text-[10px]"
                         >
                           {copiedDraftId === msg.id ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
+                            <Check className="w-3 h-3 mr-1" />
                           ) : (
-                            <Copy className="w-3 h-3" />
+                            <Copy className="w-3 h-3 mr-1" />
                           )}
-                          {copiedDraftId === msg.id ? 'Copied' : 'Copy Draft'}
-                        </button>
+                          {copiedDraftId === msg.id ? 'Copied' : 'Copy'}
+                        </Button>
                       </div>
 
-                      <pre className="p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[10px] overflow-x-auto max-h-56 leading-relaxed whitespace-pre-wrap">
+                      <pre className="p-3 bg-[#18181B] text-white rounded-[6px] font-mono text-[10px] overflow-x-auto max-h-56 leading-relaxed whitespace-pre-wrap">
                         {msg.draftContent}
                       </pre>
                     </div>
                   )}
 
                   <div
-                    className={`text-[9px] font-mono ${
-                      msg.sender === 'user' ? 'text-blue-200 text-right' : 'text-slate-400'
-                    }`}
+                    className={`text-[9px] font-mono ${msg.sender === 'user' ? 'text-white/80 text-right' : 'text-[#595959]'
+                      }`}
                   >
                     {msg.timestamp}
                   </div>
                 </div>
 
                 {msg.sender === 'user' && (
-                  <div className="w-6 h-6 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-6 h-6 rounded-[6px] bg-[#18181B] text-white flex items-center justify-center shrink-0 mt-0.5">
                     <UserIcon className="w-3.5 h-3.5" />
                   </div>
                 )}
@@ -287,11 +385,11 @@ export const AIAssistantWidget: React.FC = () => {
             ))}
 
             {loading && (
-              <div className="flex gap-2.5 items-center text-xs text-slate-500">
-                <div className="w-6 h-6 rounded-md bg-[#0B2240] text-amber-300 flex items-center justify-center shrink-0">
+              <div className="flex gap-2.5 items-center text-xs text-[#595959]">
+                <div className="w-6 h-6 rounded-[6px] bg-[#F4F4F5] border border-[#E6E6E6] text-[#111111] flex items-center justify-center shrink-0">
                   <Bot className="w-3.5 h-3.5 animate-spin" />
                 </div>
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-slate-600">
+                <div className="p-3 bg-[#F4F4F5] rounded-[8px] border border-[#E6E6E6] text-[#111111]">
                   Querying role-scoped statutory clearance services...
                 </div>
               </div>
@@ -301,7 +399,7 @@ export const AIAssistantWidget: React.FC = () => {
           </div>
 
           {/* Input Bar */}
-          <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+          <div className="p-3 bg-white border-t border-[#E6E6E6] shrink-0">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -315,23 +413,25 @@ export const AIAssistantWidget: React.FC = () => {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={t('assistant.placeholder', 'Ask a question or request notice draft...')}
                 disabled={loading}
-                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-[#0B2240] focus:bg-white"
+                className="flex-1 px-3.5 py-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs text-[#111111] focus:outline-none focus:border-[#111111]"
               />
-              <button
+              <Button
                 type="submit"
+                size="icon"
                 disabled={loading || !input.trim()}
-                className="p-2.5 bg-[#0B2240] hover:bg-[#07172C] text-white rounded-xl disabled:opacity-50 transition-colors cursor-pointer shrink-0"
+                aria-label="Send message"
               >
                 <Send className="w-4 h-4" />
-              </button>
+              </Button>
             </form>
-            <p className="text-[10px] text-slate-400 text-center mt-1.5">
-              Strict Rule #2 Human Oversight: AI outputs are advisory drafts and cannot execute approvals.
+            <p className="text-[10px] text-[#595959] text-center mt-1.5">
+              Rule #2 Human Oversight: AI outputs are advisory drafts and cannot execute approvals.
             </p>
           </div>
         </div>
-      )}
-    </>
-  );
+      </>,
+      document.body
+    )}
+  </>
+);
 };
-

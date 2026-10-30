@@ -144,7 +144,7 @@ def test_evc_queue_prioritizes_new_institutions(client: TestClient, db_session: 
 
     # Verify all items in queue tab are active queue statuses
     for item in queue:
-        assert item["status"] in ["QUEUED", "SCHEDULED", "DUE_SOON"]
+        assert item["status"] in ["QUEUED", "SCHEDULED", "DUE_SOON", "OVERDUE"]
 
     # Verify that if both new and existing institutions exist, all new institutions appear first
     first_existing_index = None

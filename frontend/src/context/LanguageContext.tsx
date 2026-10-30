@@ -16,13 +16,13 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'nav.alerts': 'Alerts & Escalations',
     'nav.reports': 'Statutory Reports',
     'nav.audit': 'Cryptographic Audit Trail',
-    'nav.integration': 'AICTE Portal Bridge',
+    'nav.integration': 'Portal Bridge',
     'nav.admin_settings': 'Admin Settings',
     'nav.workflow_routes': 'Workflow Routes',
     'nav.escalations': 'Escalation Ladder',
     'nav.compliance_rules': 'Compliance Rules',
     'nav.logout': 'Sign Out',
-    'system.title': 'AICTE IntelliApprove',
+    'system.title': 'IntelliApprove',
     'system.tagline': 'Automate. Monitor. Comply.',
 
     // Common Actions
@@ -78,7 +78,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'status.high_risk': 'HIGH RISK',
 
     // Assistant & OCR
-    'assistant.title': 'AICTE Statutory Assistant',
+    'assistant.title': 'Statutory Assistant',
     'assistant.placeholder': 'Ask e.g. "Show overdue EVCs in Western region" or "Draft deficiency notice"',
     'assistant.disclaimer': 'AI Draft: Requires human official review and confirmation before dispatch.',
     'ocr.title': 'Lease OCR Assist',
@@ -99,13 +99,13 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'nav.alerts': 'अलर्ट व एस्केलेशन',
     'nav.reports': 'सांविधिक रिपोर्ट',
     'nav.audit': 'क्रिप्टोग्राफिक ऑडिट खाता',
-    'nav.integration': 'एआईसीटीई पोर्टल ब्रिज',
+    'nav.integration': 'पोर्टल ब्रिज',
     'nav.admin_settings': 'प्रशासन सेटिंग्स',
     'nav.workflow_routes': 'कार्यप्रवाह मार्ग',
     'nav.escalations': 'एस्केलेशन सीढ़ी',
     'nav.compliance_rules': 'अनुपालन नियम',
     'nav.logout': 'लॉग आउट',
-    'system.title': 'एआईसीटीई इन्टेली-एप्रूव',
+    'system.title': 'इन्टेली-एप्रूव',
     'system.tagline': 'स्वचालन। निगरानी। अनुपालन।',
 
     // Common Actions
@@ -161,7 +161,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'status.high_risk': 'उच्च जोखिम',
 
     // Assistant & OCR
-    'assistant.title': 'एआईसीटीई सांविधिक सहायक',
+    'assistant.title': 'सांविधिक सहायक',
     'assistant.placeholder': 'पूछें, जैसे "पश्चिमी क्षेत्र में अतिदेय EVC दिखाएं" या "कमी का नोटिस तैयार करें"',
     'assistant.disclaimer': 'एआई प्रारूप: प्रेषण से पूर्व सक्षम अधिकारी द्वारा समीक्षा व अनुमोदन अनिवार्य है।',
     'ocr.title': 'पट्टा ओ.सी.आर. सहायता',

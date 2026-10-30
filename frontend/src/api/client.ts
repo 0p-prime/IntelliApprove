@@ -1,9 +1,11 @@
 /**
  * API Client for IntelliApprove.
  * Injects JWT Bearer token into all requests automatically.
+ * Supports configurable remote backend via VITE_API_URL with relative fallback for proxying.
  */
 
-const BASE_URL = '/api/v1';
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const BASE_URL = `${API_BASE}/api/v1`;
 
 export class ApiError extends Error {
   status: number;

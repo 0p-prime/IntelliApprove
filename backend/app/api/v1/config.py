@@ -159,6 +159,7 @@ def update_stage_config(
         details=f"Stage '{stage['name']}' configuration updated by {current_user.full_name} ({current_user.role}).",
         ip_address=get_client_ip(request)
     )
+    db.commit()
 
     return stage
 
@@ -312,5 +313,6 @@ def update_compliance_rule(
         details=f"AICTE APH Norm Rule '{rule.rule_code}' threshold updated to {rule.standard_value} by {current_user.full_name}.",
         ip_address=get_client_ip(request)
     )
+    db.commit()
 
     return rule

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { CheckCircle2, AlertOctagon, AlertTriangle, Info, X } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -59,63 +60,60 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     <ToastContext.Provider value={{ toasts, showToast, removeToast, toast }}>
       {children}
 
-      {/* Floating Animated Toast Container */}
+      {/* Floating Toast Container - Clean Minimal Flat */}
       <div
-        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2.5 max-w-sm sm:max-w-md w-full pointer-events-none p-2"
+        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm sm:max-w-md w-full pointer-events-none p-2 font-sans"
         role="region"
         aria-live="polite"
       >
         {toasts.map((t) => {
-          const config = {
-            success: {
-              border: 'border-emerald-300 bg-emerald-50 text-emerald-900',
-              icon: CheckCircle2,
-              iconColor: 'text-emerald-600',
-              defaultTitle: 'Completed Successfully'
-            },
-            error: {
-              border: 'border-rose-300 bg-rose-50 text-rose-900',
-              icon: AlertOctagon,
-              iconColor: 'text-rose-600',
-              defaultTitle: 'Action Failed'
-            },
-            warning: {
-              border: 'border-amber-300 bg-amber-50 text-amber-900',
-              icon: AlertTriangle,
-              iconColor: 'text-amber-600',
-              defaultTitle: 'Attention Required'
-            },
-            info: {
-              border: 'border-blue-300 bg-blue-50 text-blue-900',
-              icon: Info,
-              iconColor: 'text-blue-600',
-              defaultTitle: 'Government Notice'
-            }
-          }[t.type];
-
-          const Icon = config.icon;
+          const isError = t.type === 'error';
+          const isSuccess = t.type === 'success';
 
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto p-3.5 rounded-xl border shadow-lg backdrop-blur-xs flex items-start gap-3 transition-all animate-in fade-in slide-in-from-bottom-3 duration-200 ${config.border}`}
+              className={`pointer-events-auto p-4 rounded-[8px] bg-white border flex items-start gap-3 transition-all animate-toast-in shadow-[0_8px_24px_rgba(0,0,0,0.08)] ${
+                isError ? 'border-[#E0202A]' : 'border-[#E6E6E6]'
+              }`}
             >
-              <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${config.iconColor}`} />
+              {isSuccess ? (
+                <svg
+                  className="w-5 h-5 shrink-0 mt-0.5 text-[#18181B]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle cx="12" cy="12" r="10" stroke="#18181B" strokeWidth="2" />
+                  <path
+                    d="M8 12.5L10.5 15L16 9.5"
+                    stroke="#E0202A"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="animate-draw-check"
+                  />
+                </svg>
+              ) : isError ? (
+                <AlertOctagon className="w-5 h-5 shrink-0 mt-0.5 text-[#B5121A] animate-field-shake" />
+              ) : t.type === 'warning' ? (
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-[#18181B]" />
+              ) : (
+                <Info className="w-5 h-5 shrink-0 mt-0.5 text-[#18181B]" />
+              )}
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-xs tracking-tight">
-                  {t.title || config.defaultTitle}
+                <div
+                  className={`font-semibold text-xs tracking-tight ${
+                    isError ? 'text-[#B5121A]' : 'text-[#111111]'
+                  }`}
+                >
+                  {t.title || (isError ? 'Action Failed' : isSuccess ? 'Success' : 'Notice')}
                 </div>
-                <div className="text-[11px] leading-relaxed mt-0.5 opacity-90 break-words">
+                <div className="text-xs text-[#595959] leading-relaxed mt-0.5 break-words">
                   {t.message}
                 </div>
               </div>
-              <button
-                onClick={() => removeToast(t.id)}
-                className="text-slate-400 hover:text-slate-700 p-0.5 rounded cursor-pointer shrink-0 transition-colors"
-                title="Dismiss toast"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <Button variant="quiet" size="icon" aria-label="Dismiss toast" onClick={() => removeToast(t.id)}><X className="w-3.5 h-3.5" /></Button>
             </div>
           );
         })}
@@ -131,4 +129,3 @@ export const useToast = () => {
   }
   return context;
 };
-

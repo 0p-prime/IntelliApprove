@@ -1,190 +1,212 @@
-# IntelliApprove
+# 🏛️ IntelliApprove
+### AICTE Approval Workflow Automation, Statutory Compliance & Vigilance Engine
+**Smart India Hackathon (SIH) 2026 — Problem Statement 26262**  
+*All India Council for Technical Education (AICTE), Ministry of Education, Government of India*
 
-> **AICTE Approval Workflow Automation, Compliance Monitoring, and Alert Management System**  
-> **Smart India Hackathon (SIH) 2026 — Problem Statement 26262**  
-> **All India Council for Technical Education (AICTE), Ministry of Education, Govt. of India**
+[![Backend Tests](https://img.shields.io/badge/Backend%20Tests-107%2F107%20Passing-brightgreen?style=flat-square&logo=pytest)](file:///d:/IntelliApprove/backend/tests)
+[![Frontend Build](https://img.shields.io/badge/Vite%20Build-Zero%20Errors-brightgreen?style=flat-square&logo=vite)](file:///d:/IntelliApprove/frontend)
+[![Cryptographic Audit](https://img.shields.io/badge/Rule%20%231%20Audit-SHA--256%20Tamper--Evident-blue?style=flat-square&logo=shield)](file:///d:/IntelliApprove/backend/app/services/audit_service.py)
+[![Human Oversight](https://img.shields.io/badge/Rule%20%232%20Gate-Human%20Authority%20Guaranteed-orange?style=flat-square)](file:///d:/IntelliApprove/backend/app/services/workflow_service.py)
+[![License](https://img.shields.io/badge/License-Proprietary%20GovTech-navy?style=flat-square)](LICENSE)
 
 ---
 
-## 1. Project Overview
-IntelliApprove is an integrated, government-grade workflow automation platform designed to streamline the annual approval cycle for 10,000+ technical institutions across India. It eliminates administrative latency through automated handbook compliance auditing, configurable multi-stage workflow routes, background SLA timeout monitoring, and automated escalation ladders—while guaranteeing absolute auditability and mandatory human oversight.
+## 📌 Executive Summary
+
+Every year, over 10,000+ technical institutions across India apply to the **All India Council for Technical Education (AICTE)** for Extension of Approval (EoA), establishment of new institutions, intake variations, and program additions.
+
+Historically, manual handoffs, opaque dwell times, paper-based inspection queues, and delayed deficiency rectifications have caused substantial administrative overhead and potential governance vulnerabilities.
+
+**IntelliApprove** is a resilient, modern, government-grade workflow automation platform engineered specifically for AICTE. It provides:
+1. **Dynamic Approval Workflow Engine**: 5 configurable approval templates, state-machine transitions, and mandatory-reason reverts.
+2. **Real-Time Role-Based Dashboards**: Real-time Recharts visualizations (ageing buckets, dwell-time bottlenecks, officer workloads, and national regional heatmaps).
+3. **Automated EVC Inspection Management**: Conflict-free committee scheduling, month-view inspection calendar, and priority queue for new institutions.
+4. **Conditional Undertakings & Compliance Engine**: Evidence tracking with SHA-256 cryptographic hashing and automated institution compliance scoring.
+5. **Lease & Document Validity Monitoring**: Expiry timeline tracking with 90/60/30-day thresholds and Lease OCR Assist pre-fill.
+6. **Statutory Alert & 4-Tier Escalation Ladder**: Background APScheduler worker, multi-channel notification dispatchers, and simulated time-travel clock.
+7. **Tamper-Evident SHA-256 Audit Trail**: Genesis-anchored cryptographic ledger with instant chain integrity verification and 6 statutory exportable reports.
+8. **Differentiating Capabilities**: Explainable Delay Risk Score, Natural-Language Statutory Assistant, Lease OCR scan, and AICTE Portal Integration Bridge.
 
 ---
 
-## 2. Monorepo Structure
+## 🛡️ The 5 Non-Negotiable Regulatory Safeguards
 
-```text
-IntelliApprove/
-├── backend/                  # FastAPI Application (Python 3.11/3.13)
-│   ├── app/
-│   │   ├── api/v1/          # REST Endpoints (Auth, Apps, Workflow, Compliance, Docs, Alerts, Config, Audit, Analytics)
-│   │   ├── core/            # Config, Database Session, Security (JWT), RBAC Dependencies
-│   │   ├── models/          # SQLAlchemy Models (Users, Applications, Stages, Ladders, Audits, Undertakings)
-│   │   ├── schemas/         # Pydantic Schemas for Strict Typing & Validation
-│   │   ├── services/        # Business Logic (AuditService, WorkflowService, ComplianceEngine, Scheduler)
-│   │   ├── main.py          # FastAPI App Entrypoint, CORS, Lifespan Hooks
-│   │   └── seed.py          # Database Seeder with Realistic AICTE Institutions & Demo Personas
-│   ├── tests/               # Pytest Suite Verifying Non-Negotiable Rules 1, 2, 3 & 5
-│   ├── requirements.txt     # Python Dependencies
-│   └── Dockerfile           # Backend Container Definition
-├── frontend/                 # React 19 + Vite + TypeScript + Tailwind CSS
-│   ├── src/
-│   │   ├── api/             # Fetch Client with Automatic Bearer Token Management
-│   │   ├── components/      # UI Shell (Sidebar, Header, HumanOversightBadge, StatusPill, AlertsDrawer, States)
-│   │   ├── context/         # AuthContext & Multi-Role Demo Switcher
-│   │   ├── pages/           # Pages (Dashboard, Applications, EVC, Undertakings, Documents, Alerts, Reports, Audit, Admin)
-│   │   └── types/           # Strict Domain TypeScript Interfaces
-│   ├── nginx.conf           # Production Reverse Proxy Config
-│   ├── package.json         # Frontend Dependencies
-│   └── Dockerfile           # Multi-Stage Build Container Definition
-├── docs/                     # Architectural Documentation
-│   ├── problem.md           # Full SIH 2026 Problem Statement 26262 Specification
-│   └── architecture.md      # Detailed Architecture & Mermaid Diagrams
-├── docker-compose.yml        # Multi-Container Orchestration (Postgres + Backend + Frontend)
-└── README.md                 # Project Setup & Verification Instructions
+To preserve statutory integrity, regulatory transparency, and vigilance compliance, IntelliApprove strictly enforces five immutable architectural rules:
+
+```mermaid
+flowchart TD
+    subgraph Safeguards ["🏛️ 5 Non-Negotiable Statutory Safeguards"]
+        R1["<b>Rule #1: Tamper-Evident Audit Trail</b><br/>Every action writes to an immutable ledger linked via SHA-256 hash chain: <i>hash = SHA256(prev_hash + canonical_json(row))</i>"]
+        R2["<b>Rule #2: Mandatory Human Oversight Gate</b><br/>The system NEVER auto-approves or auto-rejects. Final verdicts strictly require authorized human officer sign-off."]
+        R3["<b>Rule #3: Configurable Workflow Routes & SLAs</b><br/>Stage definitions, allowed transitions, and statutory SLA windows are loaded dynamically from database templates."]
+        R4["<b>Rule #4: Prescribed Statutory Timeframes</b><br/>Enforces rigid statutory inspection windows with automated 4-tier escalation (Officer -> Regional Head -> Bureau HQ)."]
+        R5["<b>Rule #5: Strict RBAC Data Scoping</b><br/>Strict role-based isolation: Institutions view only their own records; Regional Officers view only their regional jurisdiction."]
+    end
 ```
 
 ---
 
-## 3. Non-Negotiable System Tenets
+## 🏗️ System Architecture
 
-1. **Universal Audit Trail**: Every single state change (application stage transition, document review, undertaking creation/verification, automated escalation, user login, and config modification) immediately writes an append-only `audit_logs` record containing actor context, timestamp, IP, and before/after diffs.
-2. **Strict Human Oversight Required**: The platform **never auto-approves or auto-rejects** an application. Automated engines only compute compliance scores and highlight deficiencies to assist human reviewers. Final decisions are strictly reserved for Competent Authority members and require explicit confirmation of a 4-point verification checklist.
-3. **Database-Driven Dynamic Configuration**: All stage timelines, transition routes, reminder offsets (T-24h, T-6h), escalation ladders, and handbook compliance norms are stored in the database—never hardcoded.
-4. **Role-Based Access Control (RBAC)**: Enforces role permissions on every API endpoint across 6 roles: `INSTITUTION`, `SCRUTINY_OFFICER`, `EVC_INSPECTOR`, `REGIONAL_OFFICER`, `COMPETENT_AUTHORITY`, and `ADMIN`.
-5. **Government-Tech UI Excellence**: Deep Blue (`#0B2240`) primary, warm Saffron (`#E05A1B`) accent, Ashoka green indicators, tricolor accent ribbon, Recharts visualizations, and accessible loading/empty/error states.
+```mermaid
+flowchart TB
+    subgraph Clients ["Web & Mobile Browser Tier"]
+        UI["React 19 + TypeScript + Tailwind CSS\n(Bilingual English/Hindi UI & Guided Tour)"]
+        HEADER["Global Header Navigation\n(Context, Guided Tour, Time Travel & Alerts)"]
+    end
+
+    subgraph Gateway ["FastAPI Gateway & Auth Layer (Python 3.11/3.13)"]
+        AUTH["JWT Authenticator & RBAC Scoping Gate\n(Rules #2 & #5)"]
+        CORS["CORS Middleware & Audit Context"]
+    end
+
+    subgraph Engine ["Core Processing & Business Services"]
+        WF["Workflow Service (Section A)\n5 Route Templates & State Machine"]
+        EVC["EVC Inspection Service (Section C)\nQueue, Conflict-Free Picker & Calendar"]
+        UND["Undertakings Engine (Section D)\nSHA-256 Evidence Hasher & Compliance Score"]
+        DOC["Document Store & OCR Assist (Section E)\n90/60/30d Expiry Timeline & Lease OCR"]
+        ALERT["Alert & Escalation Engine (Section F)\nAPScheduler, Idempotency & 4-Level Ladder"]
+        AUDIT["Tamper-Evident Audit Service (Section G)\nRule #1 SHA-256 Chain & Recompute Engine"]
+        RISK["Delay Risk Score Engine (Section H)\n5-Factor Explainable Weighted Model (0-100)"]
+        AI_ASST["Natural-Language Assistant (Section H)\nRole-Scoped Query Parser & Notice Drafter"]
+        BRIDGE["AICTE Legacy Integration Bridge (Section H)\nPush/Pull Simulator & Webhook HMAC Verification"]
+    end
+
+    subgraph Data ["Storage & Persistence Tier"]
+        DB[("PostgreSQL 15+ / SQLite Fallback\n18 Relational Models")]
+        VAULT[("Encrypted Digital Evidence Vault\nSHA-256 Fingerprints")]
+    end
+
+    UI --> AUTH
+    HEADER --> AUTH
+    AUTH --> WF & EVC & UND & DOC & ALERT & AUDIT & RISK & AI_ASST & BRIDGE
+    WF & EVC & UND & DOC & ALERT & AUDIT & RISK & BRIDGE --> DB
+    DOC & UND --> VAULT
+    ALERT -. "Every Minute" .-> WF & EVC & UND & DOC
+    WF & EVC & UND & DOC -. "Every State Mutation" .-> AUDIT
+```
 
 ---
 
-## 4. Quick Start: Local Development
+## 🧰 Tech Stack
+
+| Layer | Technology | Key Capabilities & Packages |
+| :--- | :--- | :--- |
+| **Backend API** | **Python 3.11 / 3.13 + FastAPI** | High-performance asynchronous REST API, OpenAPI/Swagger interactive docs, Pydantic v2 strict data schemas. |
+| **Persistence & ORM** | **SQLAlchemy 2.0 + Alembic** | Database-agnostic relational ORM supporting PostgreSQL (Supabase, Neon, Render) with SQLite local dev fallback. |
+| **Background Scheduler** | **APScheduler 3.10** | Concurrent background worker running statutory SLA monitors, alert rule evaluations, and multi-tier escalations. |
+| **Security & Auditing** | **Python-Jose + Passlib + Cryptography** | JWT Bearer tokens, salted bcrypt hashing, HMAC SHA-256 webhook signatures, Merkle-lineage hash chaining. |
+| **Frontend Framework** | **React 19 + TypeScript 5.8** | Modern reactive component architecture, strict typing, Zero layout shift (CLS < 0.05). |
+| **Bundler & Tooling** | **Vite 8.3 + Tailwind CSS v4** | Instant Hot Module Replacement (HMR), sub-2-second production compilation (`tsc -b && vite build` in 1.39s). |
+| **Data Visualizations** | **Recharts 3.10** | Interactive SVG charts (stage funnel, ageing buckets, regional dwell time, officer workload). |
+| **Automated Testing** | **Pytest + Playwright Chrome** | 107 unit/integration tests passing (100%), automated headless browser walkthrough with zero console errors. |
+
+---
+
+## 🚀 Quickstart: Local Development Setup
 
 ### Prerequisites
-- Python 3.11 or newer
-- Node.js v18 or newer & npm
+- **Python 3.11+**
+- **Node.js 18+ & npm**
+- **Google Chrome** (for Playwright automated verification)
 
-### Step 1: Backend Setup
+### 1. Clone & Set Up Backend
 ```bash
-# Navigate to backend directory
-cd backend
+# Clone the repository
+git clone https://github.com/your-org/IntelliApprove.git
+cd IntelliApprove
 
-# Create and activate virtual environment
+# Create virtual environment
 python -m venv venv
-# On Windows:
+
+# Activate virtual environment
+# Windows (PowerShell):
 .\venv\Scripts\Activate.ps1
-# On macOS/Linux:
+# Linux / macOS:
 source venv/bin/activate
 
-# Install dependencies (including Alembic)
-pip install -r requirements.txt email-validator
+# Install backend dependencies
+pip install -r backend/requirements.txt
 
-# Run database migrations with Alembic
-alembic upgrade head
+# Run one-step clean seed and cryptographic chain verification
+python seed_reset.py
 
-# Run database seeder (initializes 15 core tables with rich AICTE seed data)
-python -m app.seed
-
-# Run backend test suite
-pytest tests/test_backend.py
-
-# Start FastAPI server
+# Launch FastAPI backend server
+cd backend
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-*Backend API will be running at `http://127.0.0.1:8000` with interactive Swagger docs at `http://127.0.0.1:8000/docs`.*
+*Backend API will run at `http://127.0.0.1:8000` with interactive Swagger docs at `http://127.0.0.1:8000/docs`.*
 
-### Step 2: Frontend Setup
+### 2. Set Up & Launch Frontend
 ```bash
-# Open a new terminal in frontend directory
+# In a new terminal window
 cd frontend
 
-# Install packages
+# Install dependencies
 npm install
 
-# Build for production validation
+# Build to verify production readiness
 npm run build
 
 # Start Vite development server
 npm run dev
 ```
-*Frontend will be running at `http://127.0.0.1:5173`.*
+*Frontend portal will run at `http://127.0.0.1:5173`.*
 
 ---
 
-## 5. Running with Docker Compose
-
-To spin up the complete production-like stack (PostgreSQL 16 + FastAPI + Nginx React Frontend):
-
-```bash
-docker compose up --build
-```
-
-- **Frontend Application**: `http://localhost:5173`
-- **Backend API**: `http://localhost:8000`
-- **Swagger Documentation**: `http://localhost:8000/docs`
-- **PostgreSQL Database**: Port `5432`
-
----
-
-## 6. Pre-Configured Demo Accounts (All Roles)
+## 🔑 Pre-Configured Demo Accounts (All 6 Roles)
 
 Default password for all demo accounts: **`aicte123`**
 
-| Role | Email | Region / Scope | Primary Functions |
+| Role Persona | Demo Email | Jurisdiction / Scope | Key Operational Capabilities |
 | :--- | :--- | :--- | :--- |
-| **ADMIN** | `admin@aicte.gov.in` | National HQ | System administration, user & region management |
-| **ADMIN** | `system.admin@aicte.gov.in` | National HQ | Audit log inspection, security policy configuration |
-| **BUREAU_OFFICER** | `member.secretary@aicte.gov.in` | Approval Bureau | Human oversight decision panel, speaking orders, digital signatures |
-| **BUREAU_OFFICER** | `bureau.policy@aicte.gov.in` | Policy Bureau | Workflow template routing & high-level SLA escalations |
-| **REGIONAL_HEAD** | `head.nw@aicte.gov.in` | North-Western | Regional oversight, Level-2 SLA escalations, committee appointments |
-| **REGIONAL_HEAD** | `head.w@aicte.gov.in` | Western | Western region oversight (Mumbai / Pune) |
-| **REGIONAL_HEAD** | `head.sw@aicte.gov.in` | South-Western | South-Western region oversight (Bengaluru / Kerala) |
-| **REGIONAL_OFFICER** | `ro.nw@aicte.gov.in` | North-Western | Scrutiny review, undertaking tracking, Level-1 escalations |
-| **REGIONAL_OFFICER** | `ro.w@aicte.gov.in` | Western | Scrutiny evaluation & compliance verification |
-| **REGIONAL_OFFICER** | `ro.s@aicte.gov.in` | Southern | Scrutiny evaluation & document verification |
-| **EVC_MEMBER** | `evc.expert1@aicte.gov.in` | Eastern | Expert Visit Committee physical & virtual inspections |
-| **EVC_MEMBER** | `evc.expert2@aicte.gov.in` | South-Western | Infrastructure, laboratory and faculty verification |
-| **INSTITUTION** | `principal@ditm.ac.in` | Delhi (NW) | Submit EoA applications, upload deeds, track approvals |
-| **INSTITUTION** | `director@mcer.edu.in` | Maharashtra (W) | Manage undertakings, rectify document shortfalls |
+| **ADMIN** | `admin@aicte.gov.in` | National HQ (All Regions) | System clock time travel, one-click demo reset, audit verification, user management. |
+| **BUREAU_OFFICER** | `member.secretary@aicte.gov.in` | Approval Bureau (HQ) | Rule #2 human approval/refusal authority gate, speaking orders, policy oversight. |
+| **REGIONAL_HEAD** | `head.nw@aicte.gov.in` | North-Western Region | Regional team workload, Level-2 SLA escalations, SAC/SHC committee appointments. |
+| **REGIONAL_OFFICER** | `ro.w@aicte.gov.in` | Western Region | Scrutiny review, deficiency return with mandatory remarks, undertaking verification. |
+| **EVC_MEMBER** | `evc.expert1@aicte.gov.in` | Eastern Region (Field) | Assigned physical/virtual EVC inspection visits, field report uploads. |
+| **INSTITUTION** | `principal@ditm.ac.in` | Delhi Institute of Tech. | Submit EoA applications, upload renewal deeds, rectify shortfalls, track compliance score. |
 
 ---
 
-## 7. Database Architecture & Seed Dataset
+## 🔄 One-Step Clean Demo Data Reseed & Reset
 
-IntelliApprove implements an 18-table architecture managed via **SQLAlchemy + Alembic migrations**:
+To restore clean evaluation data across all models with exactly 20 institutions, 94 applications, and re-verify the Rule #1 SHA-256 audit ledger in a single step (runs in < 10 seconds):
 
-### Database Tables (18 Core Tables)
-1. **`users`**: User identity, role-based access (`INSTITUTION`, `REGIONAL_OFFICER`, `REGIONAL_HEAD`, `BUREAU_OFFICER`, `EVC_MEMBER`, `ADMIN`), regional jurisdiction, salted password hashes.
-2. **`regions`**: 8 official AICTE regions (Northern, Southern, Western, Eastern, Central, South-Western, North-Western, South-Central).
-3. **`institutions`**: 60 AICTE-approved institutions across Indian states, mapped to regions and institution categories (Engineering, Management, Pharmacy, Architecture, Polytechnic).
-4. **`applications`**: 150 applications spanning lifecycle stages (`SUBMITTED`, `SCRUTINY`, `EVC`, `SAC_SHC`, `BUREAU_DECISION`, `APPROVED`, `REJECTED`, `DEFICIENT`), assigned officers, risk scores, compliance scores, deficiency counts, and due dates.
-5. **`workflow_templates`**: Configurable route definitions ("Only Scrutiny", "Scrutiny + EVC", "EVC + SAC/SHC", "Only EVC", "Scrutiny + EVC + SAC/SHC") stored as JSON stages and transitions.
-6. **`stage_history`**: Granular immutable state transitions for each application with timestamps, acting officers, and remarks.
-7. **`evc_schedules`**: 25 Expert Visit Committee inspection schedules (upcoming, due soon, overdue, completed) with committee member IDs and new-institution flags.
-8. **`undertakings`**: 40 post-approval compliance commitments (pending, due soon, overdue, verified) tied to legal conditions and verification proofs.
-9. **`documents`**: 60 institutional documents (leases, building plans, fire NOCs, audited accounts) with lease expiry dates spread from -30 to +365 days.
-10. **`files`**: Static evidence file registry with SHA-256 digital fingerprinting.
-11. **`alert_rules`**: Automated alert policies (T-7, T-3, T-1, overdue; lease warnings at 90/60/30/7 days; multi-tier escalation ladders).
-12. **`notifications`**: Targeted user alerts with severities (`INFO`, `WARNING`, `CRITICAL`, `ESCALATION`).
-13. **`escalations`**: Automated multi-tier escalation records (Level 1: Regional Officer -> Level 2: Regional Head -> Level 3: Bureau Officer).
-14. **`audit_logs`**: Append-only cryptographic audit trail linking every event in a SHA-256 hash chain (`prev_hash` -> `hash`) anchored to genesis digest `7c1c21e...`.
-15. **`system_clock`**: Simulated date controller for time-travel demonstrations during evaluations.
-16. **`compliance_norm_rules`**: Configurable AICTE Approval Process Handbook (APH) norms (FSR, Land, Built-up area, Digital computers, Anti-Ragging, POSH ICC, Student Grievance, Barrier-Free Divyangjan, Cadre Ratios).
-17. **`academic_programs`**: Departmental program enrolment records (UG, PG, Diploma) with faculty counts, intake, student populations, and division numbers.
-18. **`deficiency_records`**: Granular flagged deficiencies against statutory norms, rectification proofs, officer verifications, and compliance scores.
-
-### Full Automated Verification Suite (83 of 83 Tests Passing)
-Run the entire comprehensive test suite across all 10 modules:
 ```bash
-pytest -o pythonpath=backend backend/tests -v
+# Reseed via backend seed script with --reset
+python backend/app/seed.py --reset
+
+# Or via root convenience runner
+python seed_reset.py
+
+# Or platform shell scripts
+# Windows:
+seed-reset.bat
+# Linux / macOS:
+./seed-reset.sh
+# Frontend npm script:
+npm run seed:reset
 ```
 
-Test coverage includes:
-- `test_alerts_and_clock.py`: System clock simulation, manual advance, SLA evaluations, escalation generation, rules CRUD.
-- `test_aph_compliance_and_audit_chain.py`: APH norm evaluations, deficiency rectification & officer verification, national reports, SHA-256 cryptographic chain integrity verification & tamper detection, CSV export.
-- `test_backend.py`: Health checks, Non-Negotiable Rule #1 (Login audit log), Rule #2 (Human oversight gate), Rule #3 (Configurable workflows & SLAs), Rule #5 (RBAC).
-- `test_dashboard.py`: National KPIs, 8-region performance distribution, stage funnel, ageing buckets, officer workload, bottlenecks, upcoming deadlines.
-- `test_documents.py`: Validity status computations (VALID, EXPIRING_SOON, CRITICAL, EXPIRED), renewals upload & verification, document timelines.
-- `test_evc.py`: EVC auto-creation, new-institution queue prioritization, scheduling/rescheduling with audit logs, inspection completion & auto-advancement.
-- `test_rbac_scoping.py`: Strict data scoping across all 6 roles (ADMIN, BUREAU_OFFICER, REGIONAL_HEAD, REGIONAL_OFFICER, EVC_MEMBER, INSTITUTION).
-- `test_time_travel_30d_engine.py`: Fast-forwarding time +30 days, multi-entity escalations, idempotency, auto-resolution on compliance fulfillment, external channel dispatching.
-- `test_undertakings.py`: Conditional approvals, SHA-256 evidence hashing, officer verification/rejection with mandatory speaking orders, compliance score heat tables.
-- `test_workflow_engine.py`: State-machine validation across all 5 workflow routes, human oversight barriers, return-to-stage deficiency handling, and Electronic Case Summary (ECS) generation.
+### 📊 Seed Dataset Volume & Distribution Summary
+- **20 Institutions**: Across all 8 AICTE regions (4 regions with 3 institutions, 4 regions with 2). Realistic Indian names covering Engineering, Polytechnic, Management, Pharmacy, and Architecture, with exactly 6 marked `is_new = True`.
+- **94 Applications**: Every institution has between 3 and 8 applications. Delhi Institute of Technology & Management (`principal@ditm.ac.in`) has **exactly 8** applications.
+- **Workflow Routes**: Only Scrutiny (19), Scrutiny + EVC (33), EVC + SAC/SHC (14), Only EVC (9), Scrutiny + EVC + SAC/SHC (19).
+- **Workflow Stages**: Submission (8), Scrutiny (26), EVC (22), SAC/SHC (13), Bureau decision (7), Approved (11), Refused (4), Returned for clarification (3).
+- **Active Cases Ageing**: 0–7 days (19), 8–15 days (19), 16–30 days (23), 30+ days (15).
+- **SLA Deadlines**: 14 overdue, 9 due within 7 days (approaching deadline in 1–3 days), and 7 returned at least once with recorded speaking reasons.
+- **Related Records**: 15 EVC schedules (3 queued, 3 scheduled, 3 due soon, 3 overdue, 3 completed), 30 undertakings across 5 statuses, 40 documents (3 expired, 4 in 30d, 6 in 90d, 27 long-term valid, 3 renewals), 15 notifications, 6 escalations, and validated SHA-256 audit ledger.
+
+*In cloud environments (Vercel/Render), administrators can also trigger a reset via `POST /api/v1/admin/reset-demo-data`.*
+
+---
+
+## 📚 Documentation & Evaluator Guides
+
+- 📖 **[5-Minute Evaluator Live Demo Script](file:///d:/IntelliApprove/docs/demo-script.md)**: Timed, step-by-step walkthrough covering submission, deficiency return, time travel, and audit verification.
+- 🗺️ **[Statutory Requirement & Feature Matrix](file:///d:/IntelliApprove/docs/feature-matrix.md)**: Traceability matrix mapping Sections A through H to exact APIs and UI components.
+- 🚀 **[Cloud Deployment Guide](file:///d:/IntelliApprove/docs/deployment.md)**: Production deployment instructions for Vercel, Netlify, Render, Railway, Supabase, and Neon.
+- 🔒 **[Security & Vigilance Architecture](file:///d:/IntelliApprove/docs/security.md)**: Deep dive into Rule #1 cryptographic hash chaining, digital signatures, and RBAC scoping.
+- 📊 **[Comprehensive QA Verification Report](file:///d:/IntelliApprove/FINAL_QA_AUDIT_REPORT.md)**: Performance benchmarks (< 600ms load), test coverage (107/107 passed), and 21 captured screenshot artifacts.

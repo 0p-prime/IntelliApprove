@@ -93,7 +93,7 @@ def test_list_undertakings_and_dynamic_statuses(client: TestClient, db_session: 
     resp = client.get("/undertakings", headers=headers)
     assert resp.status_code == 200
     items = resp.json()
-    assert len(items) >= 40
+    assert len(items) >= 30
 
     # Verify fields present on all items
     for item in items:
@@ -375,7 +375,7 @@ def test_compliance_heat_table_endpoint(client: TestClient, db_session: Session)
 
     summary = data["summary"]
     assert summary["total_institutions"] > 0
-    assert summary["total_undertakings"] >= 40
+    assert summary["total_undertakings"] >= 30
     assert 0.0 <= summary["national_average_score"] <= 100.0
 
     assert len(data["regional_breakdown"]) > 0

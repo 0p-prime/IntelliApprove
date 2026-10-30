@@ -181,3 +181,42 @@ def get_external_dispatches(
         raise HTTPException(status_code=403, detail="Unauthorized")
     return {"dispatches": DISPATCH_HISTORY[-50:]}
 
+
+@router.post("/reset-demo-data")
+def admin_reset_demo_data(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    ADMIN only: Wipe and restore clean demo dataset across all 15 models.
+    Reseeds 25 users, 5 workflow templates, applications, documents, undertakings,
+    and initializes a clean cryptographic SHA-256 hash chain.
+    """
+    if current_user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=403,
+            detail="Security clearance denied: Administrator role required to reset demo data."
+        )
+
+    from app.seed import seed_database
+    seed_database(reset=True)
+
+    client_ip = get_client_ip(request)
+    AuditService.log_action(
+        db=db,
+        action="DEMO_DATA_RESET",
+        entity_type="SYSTEM",
+        entity_id="DATABASE",
+        user=current_user,
+        old_value=None,
+        new_value={"status": "CLEAN_SEEDED"},
+        details=f"Admin {current_user.email} executed one-click clean demo data reset.",
+        ip_address=client_ip
+    )
+
+    return {
+        "status": "success",
+        "message": "Demo database successfully reset and restored to pristine AICTE SIH evaluation state."
+    }
+

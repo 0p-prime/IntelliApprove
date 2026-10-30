@@ -19,8 +19,8 @@ import { WorkflowConfigPage } from './pages/WorkflowConfigPage';
 import { EscalationLadderPage } from './pages/EscalationLadderPage';
 import { ComplianceRulesPage } from './pages/ComplianceRulesPage';
 import { IntegrationPage } from './pages/IntegrationPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { AIAssistantWidget } from './components/AIAssistantWidget';
-import { DemoBanner } from './components/DemoBanner';
 import { GuidedTourModal } from './components/GuidedTourModal';
 import { LanguageProvider } from './context/LanguageContext';
 import { ToastProvider } from './context/ToastContext';
@@ -35,8 +35,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <LoadingState message="Verifying session and security clearance..." />
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <LoadingState message="Verifying session clearance..." />
       </div>
     );
   }
@@ -63,20 +63,19 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
 };
 
 const AppShell: React.FC = () => {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const location = useLocation();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <LoadingState message="Initializing IntelliApprove Gov Portal..." />
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <LoadingState message="Initializing IntelliApprove Portal..." />
       </div>
     );
   }
 
-  // If on /login page, render it directly without AppShell framing
   if (location.pathname === '/login') {
     if (isAuthenticated) {
       return <Navigate to="/" replace />;
@@ -84,23 +83,28 @@ const AppShell: React.FC = () => {
     return <LoginPage />;
   }
 
-  // If unauthenticated on any other route, redirect to /login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans">
-      <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-      <DemoBanner onOpenTour={() => setTourOpen(true)} />
+    <div className="min-h-screen bg-[#FAFAFA] flex w-full font-sans antialiased text-[#18181B]">
+      {/* 250px Left Sidebar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      <div className="flex-1 flex w-full">
-        {/* Role-based App Shell Sidebar */}
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAFA]">
+        <Header
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onOpenTour={() => setTourOpen(true)}
+        />
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <Routes>
+        <main className="flex-1 min-w-0 px-6 sm:px-10 lg:px-12 pt-6 pb-20 max-w-7xl w-full mx-auto">
+          <div key={location.pathname} className="animate-page-enter">
+            <Routes location={location}>
             <Route
               path="/"
               element={
@@ -136,7 +140,7 @@ const AppShell: React.FC = () => {
             <Route
               path="/evc"
               element={
-                <ProtectedRoute allowedRoles={['ADMIN', 'BUREAU_OFFICER', 'REGIONAL_HEAD', 'REGIONAL_OFFICER', 'EVC_MEMBER']}>
+                <ProtectedRoute>
                   <EVCPage />
                 </ProtectedRoute>
               }
@@ -221,25 +225,13 @@ const AppShell: React.FC = () => {
                 </ProtectedRoute>
               }
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </div>
         </main>
       </div>
 
-      <footer className="bg-white border-t border-slate-200 py-4 text-slate-500 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800">IntelliApprove</span>
-            <span>•</span>
-            <span>Smart India Hackathon 2026 (PS 26262)</span>
-          </div>
-          <div className="text-[11px] text-slate-400 text-center sm:text-right">
-            AICTE Regulatory Compliance & Vigilance Assurance • Strict Human Oversight Mandated
-          </div>
-        </div>
-      </footer>
-
-      {/* Role-Scoped AI Statutory Query & Drafting Assistant */}
+      {/* AI Governance Assistant */}
       <AIAssistantWidget />
 
       {/* Guided Tour Modal */}

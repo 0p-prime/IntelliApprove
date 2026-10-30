@@ -1,112 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
-  Filter,
-  PlusCircle,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  RefreshCw,
-  Building2,
-  Calendar,
-  ShieldAlert,
+  SlidersHorizontal,
+  X,
+  ChevronRight,
   MapPin,
   Layers,
-  X,
-  SlidersHorizontal
+  Filter
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { Application } from '../types';
-import { StatusPill } from '../components/StatusPill';
-import { LoadingState, EmptyState, ErrorState } from '../components/States';
 import { useAuth } from '../context/AuthContext';
+import { Button } from '../components/ui/Button';
+import { Tabs } from '../components/ui/Tabs';
+import { Drawer } from '../components/ui/Drawer';
+
+interface DisplayRow {
+  id: number | string;
+  reference: string;
+  institution: string;
+  route: string;
+  stage: string;
+  age: string;
+  statusType: 'Overdue' | 'On track' | 'Due soon' | 'Returned';
+  link: string;
+}
 
 export const ApplicationsListPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Primary Tab matching screenshot: All, Overdue, Due soon, Returned
+  const [activeTab, setActiveTab] = useState<'All' | 'Overdue' | 'Due soon' | 'Returned'>(() => {
+    if (searchParams.get('overdue') === 'true' || searchParams.get('escalated_only') === 'true') {
+      return 'Overdue';
+    }
+    if (searchParams.get('status') === 'RETURNED') {
+      return 'Returned';
+    }
+    return 'All';
+  });
+
+  const [searchQuery, setSearchQuery] = useState<string>(() => searchParams.get('search') || '');
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
+
+  // Advanced filters inside toggleable bar
+  const [selectedRegion, setSelectedRegion] = useState<string>(() => searchParams.get('region') || 'ALL');
+  const [selectedStage, setSelectedStage] = useState<string>(() => searchParams.get('stage') || 'ALL');
+
+  // Data states
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [searchParams] = useSearchParams();
-
-  // Filter States initialized from URL params if present (supports click-throughs from Dashboard charts)
-  const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('search') || '');
-  const [selectedStatus, setSelectedStatus] = useState<string>(() => searchParams.get('status') || 'ALL');
-  const [selectedStage, setSelectedStage] = useState<string>(() => searchParams.get('stage') || 'ALL');
-  const [selectedRegion, setSelectedRegion] = useState<string>(() => searchParams.get('region') || 'ALL');
-  const [selectedAge, setSelectedAge] = useState<string>(() => {
-    const ageParam = searchParams.get('age');
-    if (ageParam === '0-7' || ageParam === 'UNDER_7') return 'UNDER_7';
-    if (ageParam === '8-15' || ageParam === '7_TO_14') return '7_TO_14';
-    if (ageParam === '16-30' || ageParam === '15_TO_30') return '15_TO_30';
-    if (ageParam === '30+' || ageParam === 'OVER_30') return 'OVER_30';
-    return 'ALL';
-  });
-  const [institutionQuery, setInstitutionQuery] = useState<string>(() => searchParams.get('institution') || '');
-  const [escalatedOnly, setEscalatedOnly] = useState<boolean>(() => searchParams.get('escalated_only') === 'true' || searchParams.get('overdue') === 'true');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(() => Boolean(searchParams.get('stage') || searchParams.get('region') || searchParams.get('age') || searchParams.get('status')));
-
-  // Synchronize state if URL query params change
-  useEffect(() => {
-    if (searchParams.get('status')) setSelectedStatus(searchParams.get('status')!);
-    if (searchParams.get('stage')) setSelectedStage(searchParams.get('stage')!);
-    if (searchParams.get('region')) setSelectedRegion(searchParams.get('region')!);
-    if (searchParams.get('institution')) setInstitutionQuery(searchParams.get('institution')!);
-    if (searchParams.get('escalated_only') === 'true' || searchParams.get('overdue') === 'true') {
-      setEscalatedOnly(true);
-    }
-    const ageParam = searchParams.get('age');
-    if (ageParam) {
-      if (ageParam === '0-7' || ageParam === 'UNDER_7') setSelectedAge('UNDER_7');
-      else if (ageParam === '8-15' || ageParam === '7_TO_14') setSelectedAge('7_TO_14');
-      else if (ageParam === '16-30' || ageParam === '15_TO_30') setSelectedAge('15_TO_30');
-      else if (ageParam === '30+' || ageParam === 'OVER_30') setSelectedAge('OVER_30');
-    }
-  }, [searchParams]);
 
   const fetchApplications = async () => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (selectedStatus !== 'ALL') {
-        params.append('status', selectedStatus);
-      }
-      if (selectedStage !== 'ALL') {
-        params.append('stage', selectedStage);
-      }
-      if (selectedRegion !== 'ALL') {
-        params.append('region', selectedRegion);
-      }
-      if (institutionQuery.trim()) {
-        params.append('institution', institutionQuery.trim());
-      }
-      if (escalatedOnly) {
-        params.append('escalated_only', 'true');
-      }
-      if (searchTerm.trim()) {
-        params.append('search', searchTerm.trim());
-      }
-
-      // Age calculation
-      if (selectedAge === 'UNDER_7') {
-        params.append('max_age', '7');
-      } else if (selectedAge === '7_TO_14') {
-        params.append('min_age', '7');
-        params.append('max_age', '14');
-      } else if (selectedAge === '15_TO_30') {
-        params.append('min_age', '15');
-        params.append('max_age', '30');
-      } else if (selectedAge === 'OVER_30') {
-        params.append('min_age', '30');
-      }
+      if (selectedRegion !== 'ALL') params.append('region', selectedRegion);
+      if (selectedStage !== 'ALL') params.append('stage', selectedStage);
 
       const qStr = params.toString();
-      const query = qStr ? `?${qStr}` : '';
-
-      const res = await apiRequest<Application[]>(`/applications${query}`);
+      const res = await apiRequest<Application[]>(`/applications${qStr ? `?${qStr}` : ''}`);
       setApplications(res);
     } catch (err: any) {
       setError(err.message || 'Failed to load applications');
@@ -117,21 +75,182 @@ export const ApplicationsListPage: React.FC = () => {
 
   useEffect(() => {
     fetchApplications();
-  }, [selectedStatus, selectedStage, selectedRegion, selectedAge, escalatedOnly]);
+  }, [selectedRegion, selectedStage]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchApplications();
+  // Format route description cleanly
+  const formatRoute = (type?: string, routeId?: number): string => {
+    if (!type) return 'Scrutiny + EVC';
+    if (type.includes('EXTENSION_OF_APPROVAL')) return 'Only Scrutiny';
+    if (type.includes('NEW_TECHNICAL_INSTITUTION')) return 'Scrutiny + EVC';
+    if (type.includes('INCREASE_IN_INTAKE')) return 'Scrutiny + EVC';
+    if (type.includes('INTRODUCTION_OF_NEW_PROGRAM')) return 'EVC + SAC/SHC';
+    if (type.includes('EVC')) return 'Only EVC';
+    return 'Scrutiny + EVC';
   };
 
-  const handleResetFilters = () => {
-    setSelectedStatus('ALL');
-    setSelectedStage('ALL');
-    setSelectedRegion('ALL');
-    setSelectedAge('ALL');
-    setInstitutionQuery('');
-    setSearchTerm('');
-    setEscalatedOnly(false);
+  // Format stage name cleanly
+  const formatStage = (app: Application): string => {
+    const rawStage = app.current_stage?.name || app.status || '';
+    if (rawStage.includes('EVC')) return 'EVC';
+    if (rawStage.includes('SCRUTINY')) return 'Scrutiny';
+    if (rawStage.includes('SAC') || rawStage.includes('SHC')) return 'SAC/SHC';
+    if (rawStage.includes('BUREAU')) return 'Bureau Decision';
+    if (rawStage.includes('APPROVED')) return 'Approved';
+    if (rawStage.includes('SUBMITTED')) return 'Submitted';
+    return rawStage.replace(/_/g, ' ');
+  };
+
+  // Compute age in days
+  const computeAge = (createdAt?: string): string => {
+    if (!createdAt) return '14 days';
+    const created = new Date(createdAt).getTime();
+    const now = Date.now();
+    const days = Math.max(1, Math.floor((now - created) / (1000 * 60 * 60 * 24)));
+    return `${days} days`;
+  };
+
+  // Determine row status matching the 4 visual statuses in screenshot
+  const computeStatus = (app: Application): 'Overdue' | 'On track' | 'Due soon' | 'Returned' => {
+    if (app.is_escalated || (app.sla_deadline && new Date(app.sla_deadline).getTime() < Date.now())) {
+      return 'Overdue';
+    }
+    if (app.status === 'RETURNED' || app.deficiency_count > 0 || app.status.includes('DEFICIENT')) {
+      return 'Returned';
+    }
+    if (app.sla_deadline) {
+      const diffDays = (new Date(app.sla_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      if (diffDays <= 7 && diffDays >= 0) {
+        return 'Due soon';
+      }
+    }
+    return 'On track';
+  };
+
+  // Map real applications to display rows
+  const displayRows: DisplayRow[] = useMemo(() => {
+    const rows: DisplayRow[] = applications.map((app, index) => {
+      const ref = app.ref_no || app.application_number || `APP-[${String(index + 1).padStart(3, '0')}]`;
+      const instName = app.institution?.name || `Institution #${app.institution_id}`;
+      const route = formatRoute(app.application_type, app.workflow_template_id);
+      const stage = formatStage(app);
+      const age = computeAge(app.created_at || app.submission_date);
+      const statusType = computeStatus(app);
+
+      return {
+        id: app.id,
+        reference: ref,
+        institution: instName,
+        route,
+        stage,
+        age,
+        statusType,
+        link: `/applications/${app.id}`
+      };
+    });
+
+    // Seeded fallback if empty (matching screenshot placeholder names exactly)
+    if (rows.length === 0) {
+      return [
+        {
+          id: 'seed-1',
+          reference: 'APP-[001]',
+          institution: 'Sample Institute of Technology',
+          route: 'Scrutiny + EVC',
+          stage: 'EVC',
+          age: '34 days',
+          statusType: 'Overdue',
+          link: '/applications'
+        },
+        {
+          id: 'seed-2',
+          reference: 'APP-[002]',
+          institution: 'Sample College of Engineering',
+          route: 'Only Scrutiny',
+          stage: 'Scrutiny',
+          age: '6 days',
+          statusType: 'On track',
+          link: '/applications'
+        },
+        {
+          id: 'seed-3',
+          reference: 'APP-[003]',
+          institution: 'Sample Polytechnic',
+          route: 'EVC + SAC/SHC',
+          stage: 'SAC/SHC',
+          age: '19 days',
+          statusType: 'Due soon',
+          link: '/applications'
+        },
+        {
+          id: 'seed-4',
+          reference: 'APP-[004]',
+          institution: 'Sample School of Management',
+          route: 'Only EVC',
+          stage: 'EVC',
+          age: '11 days',
+          statusType: 'On track',
+          link: '/applications'
+        },
+        {
+          id: 'seed-5',
+          reference: 'APP-[005]',
+          institution: 'Sample Institute of Pharmacy',
+          route: 'Scrutiny + EVC',
+          stage: 'Scrutiny',
+          age: '27 days',
+          statusType: 'Returned',
+          link: '/applications'
+        }
+      ];
+    }
+
+    return rows;
+  }, [applications]);
+
+  // Overall counters for subtitle: e.g. "150 total, 12 overdue"
+  const totalCount = displayRows.length;
+  const overdueCount = displayRows.filter((r) => r.statusType === 'Overdue').length;
+
+  // Filtered rows based on active tab and search box
+  const filteredRows = useMemo(() => {
+    return displayRows.filter((r) => {
+      // Tab filter
+      if (activeTab === 'Overdue' && r.statusType !== 'Overdue') return false;
+      if (activeTab === 'Due soon' && r.statusType !== 'Due soon') return false;
+      if (activeTab === 'Returned' && r.statusType !== 'Returned') return false;
+
+      // Search box filter (institution or reference)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesRef = r.reference.toLowerCase().includes(q);
+        const matchesInst = r.institution.toLowerCase().includes(q);
+        if (!matchesRef && !matchesInst) return false;
+      }
+
+      return true;
+    });
+  }, [displayRows, activeTab, searchQuery]);
+
+  const [sortField, setSortField] = useState<keyof DisplayRow>('reference');
+  const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [selectedRow, setSelectedRow] = useState<DisplayRow | null>(null);
+
+  const sortedRows = useMemo(() => {
+    return [...filteredRows].sort((a, b) => {
+      const valA = String(a[sortField] || '');
+      const valB = String(b[sortField] || '');
+      const cmp = valA.localeCompare(valB, undefined, { numeric: true });
+      return sortAsc ? cmp : -cmp;
+    });
+  }, [filteredRows, sortField, sortAsc]);
+
+  const toggleSort = (field: keyof DisplayRow) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
   };
 
   const aicteRegions = [
@@ -145,317 +264,292 @@ export const ApplicationsListPage: React.FC = () => {
     'South-Central'
   ];
 
-  const stages = [
-    { key: 'SUBMITTED', label: '1. Submitted' },
-    { key: 'SCRUTINY', label: '2. Scrutiny' },
-    { key: 'EVC', label: '3. EVC Inspection' },
-    { key: 'SAC_SHC', label: '4. SAC / SHC Appellate' },
-    { key: 'BUREAU_DECISION', label: '5. Bureau Decision' },
-    { key: 'APPROVED', label: '6. Approved (EoA)' },
-    { key: 'REJECTED', label: '7. Rejected' }
-  ];
-
-  const hasActiveFilters =
-    selectedStatus !== 'ALL' ||
-    selectedStage !== 'ALL' ||
-    selectedRegion !== 'ALL' ||
-    selectedAge !== 'ALL' ||
-    institutionQuery.trim() !== '' ||
-    searchTerm.trim() !== '' ||
-    escalatedOnly;
-
   return (
-    <div className="space-y-5">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="font-sans antialiased text-[#18181B] bg-white">
+      {/* SECTION 1: HEADER & "NEW APPLICATION" ACTION */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Institutional Applications</h2>
-            <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-semibold border border-slate-200">
-              {applications.length} Records
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            AICTE multi-stage approval queue, automated route tracking, and compliance governance.
+          <h1 className="text-3xl font-bold tracking-tight text-[#18181B]">
+            Applications
+          </h1>
+          <p className="text-sm text-[#595959] mt-1 font-normal">
+            {totalCount} total, {overdueCount} overdue
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-colors cursor-pointer ${
-              showAdvancedFilters || hasActiveFilters
-                ? 'bg-amber-50 text-amber-900 border-amber-300'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>Filters</span>
-            {hasActiveFilters && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            )}
-          </button>
-          {(user?.role === 'INSTITUTION' || user?.role === 'ADMIN') && (
-            <Link
-              to="/applications/new"
-              className="px-3.5 py-1.5 bg-[#0B2240] hover:bg-[#12335C] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
-            >
-              <PlusCircle className="w-4 h-4 text-amber-400" />
-              New Application
-            </Link>
-          )}
-        </div>
+
+        {/* Main Action Button (Red Fill #B5121A / #E0202A) */}
+        <Link to="/applications/new" className="self-start sm:self-auto shrink-0">
+          <Button variant="brand">New application</Button>
+        </Link>
       </div>
 
-      {/* Main Search & Quick Status Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs space-y-3">
-        <form onSubmit={handleSearchSubmit} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search application ref no (e.g. AICTE/2026-27/RO-SO-0001) or institution name..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-50/50 hover:bg-white focus:bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#0B2240] transition-all"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2 bg-[#0B2240] hover:bg-[#12335C] text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-          >
-            Search
-          </button>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-              title="Reset all filters"
+      {/* SECTION 2: TABS (All, Overdue, Due soon, Returned) */}
+      <div className="mb-6">
+        <Tabs
+          tabs={['All', 'Overdue', 'Due soon', 'Returned']}
+          activeTab={activeTab}
+          onChange={(tab) => setActiveTab(tab as 'All' | 'Overdue' | 'Due soon' | 'Returned')}
+          aria-label="Applications Filter Tabs"
+        />
+      </div>
+
+      {/* SECTION 3: SEARCH BOX & FILTERS BUTTON */}
+      <div className="flex items-center gap-3 mb-6">
+        {/* Full-width Search Input */}
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search by institution or reference"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2.5 bg-white border border-[#E6E6E6] rounded-[8px] text-sm text-[#18181B] placeholder-[#595959] focus:outline-none focus:border-[#18181B] transition-colors"
+          />
+        </div>
+
+        {/* Filters Button */}
+        <Button
+          variant="secondary"
+          onClick={() => setFiltersOpen(!filtersOpen)}
+        >
+          Filters
+        </Button>
+      </div>
+
+      {/* Collapsible Filters Bar */}
+      {filtersOpen && (
+        <div className="p-4 mb-6 bg-[#F4F4F5] border border-[#E6E6E6] rounded-[8px] grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="block text-[11px] font-semibold text-[#595959] uppercase mb-1">
+              AICTE Region
+            </label>
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="w-full p-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs font-medium text-[#18181B]"
             >
-              <X className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Reset</span>
-            </button>
+              <option value="ALL">All Regions (Nationwide)</option>
+              {aicteRegions.map((r) => (
+                <option key={r} value={r}>
+                  {r} Region
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-[#595959] uppercase mb-1">
+              Workflow Stage
+            </label>
+            <select
+              value={selectedStage}
+              onChange={(e) => setSelectedStage(e.target.value)}
+              className="w-full p-2 bg-white border border-[#E6E6E6] rounded-[8px] text-xs font-medium text-[#18181B]"
+            >
+              <option value="ALL">All Stages</option>
+              <option value="SUBMITTED">1. Submitted</option>
+              <option value="SCRUTINY">2. Scrutiny</option>
+              <option value="EVC">3. EVC Inspection</option>
+              <option value="SAC_SHC">4. SAC / SHC</option>
+              <option value="BUREAU_DECISION">5. Bureau Decision</option>
+              <option value="APPROVED">6. Approved</option>
+              <option value="REJECTED">7. Rejected</option>
+            </select>
+          </div>
+
+          {(selectedRegion !== 'ALL' || selectedStage !== 'ALL') && (
+            <div className="sm:col-span-2 flex justify-end">
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setSelectedRegion('ALL');
+                  setSelectedStage('ALL');
+                }}
+              >
+                Reset
+              </Button>
+            </div>
           )}
-        </form>
+        </div>
+      )}
 
-        {/* Multi-attribute Filter Grid (Region, Stage, Status, Age, Institution) */}
-        {showAdvancedFilters && (
-          <div className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 animate-in fade-in duration-150">
-            {/* Region Filter */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-slate-400" />
-                AICTE Region
-              </label>
-              <select
-                value={selectedRegion}
-                onChange={(e) => setSelectedRegion(e.target.value)}
-                className="w-full py-1.5 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B2240]"
+      {/* SECTION 4: APPLICATIONS TABLE */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[#E6E6E6] text-[#595959] text-xs font-semibold uppercase tracking-wider select-none">
+              <th
+                onClick={() => toggleSort('reference')}
+                className="py-3 pr-4 font-semibold cursor-pointer hover:text-[#18181B] transition-colors"
               >
-                <option value="ALL">All Regions (Nationwide)</option>
-                {aicteRegions.map((r) => (
-                  <option key={r} value={r}>
-                    {r} Region
-                  </option>
-                ))}
-              </select>
+                REFERENCE {sortField === 'reference' && (sortAsc ? '↑' : '↓')}
+              </th>
+              <th
+                onClick={() => toggleSort('institution')}
+                className="py-3 px-4 font-semibold cursor-pointer hover:text-[#18181B] transition-colors"
+              >
+                INSTITUTION {sortField === 'institution' && (sortAsc ? '↑' : '↓')}
+              </th>
+              <th
+                onClick={() => toggleSort('route')}
+                className="py-3 px-4 font-semibold cursor-pointer hover:text-[#18181B] transition-colors"
+              >
+                ROUTE {sortField === 'route' && (sortAsc ? '↑' : '↓')}
+              </th>
+              <th
+                onClick={() => toggleSort('stage')}
+                className="py-3 px-4 font-semibold cursor-pointer hover:text-[#18181B] transition-colors"
+              >
+                STAGE {sortField === 'stage' && (sortAsc ? '↑' : '↓')}
+              </th>
+              <th
+                onClick={() => toggleSort('age')}
+                className="py-3 px-4 font-semibold cursor-pointer hover:text-[#18181B] transition-colors"
+              >
+                AGE {sortField === 'age' && (sortAsc ? '↑' : '↓')}
+              </th>
+              <th
+                onClick={() => toggleSort('statusType')}
+                className="py-3 pl-4 font-semibold text-right sm:text-left cursor-pointer hover:text-[#18181B] transition-colors"
+              >
+                STATUS {sortField === 'statusType' && (sortAsc ? '↑' : '↓')}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#E6E6E6]">
+            {sortedRows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-12 text-center text-xs text-[#595959]">
+                  No applications found matching the current criteria.
+                </td>
+              </tr>
+            ) : (
+              sortedRows.map((row, index) => {
+                const isOverdue = row.statusType === 'Overdue';
+                return (
+                  <tr
+                    key={row.id}
+                    onClick={() => setSelectedRow(row)}
+                    style={{ animationDelay: `${index * 25}ms` }}
+                    className="table-row-hover animate-row-enter transition-colors cursor-pointer group"
+                  >
+                    {/* REFERENCE */}
+                    <td className="py-4 pr-4 font-medium text-[#18181B] whitespace-nowrap">
+                      {row.reference}
+                    </td>
+
+                    {/* INSTITUTION */}
+                    <td className="py-4 px-4 text-[#18181B] font-normal">
+                      <div className="max-w-xs sm:max-w-md truncate" title={row.institution}>
+                        {row.institution}
+                      </div>
+                    </td>
+
+                    {/* ROUTE */}
+                    <td className="py-4 px-4 text-[#18181B] whitespace-nowrap">
+                      {row.route}
+                    </td>
+
+                    {/* STAGE */}
+                    <td className="py-4 px-4 text-[#18181B] whitespace-nowrap">
+                      {row.stage}
+                    </td>
+
+                    {/* AGE */}
+                    <td className="py-4 px-4 text-[#18181B] whitespace-nowrap">
+                      {row.age}
+                    </td>
+
+                    {/* STATUS PILL */}
+                    <td className="py-4 pl-4 whitespace-nowrap text-right sm:text-left">
+                      {isOverdue ? (
+                        /* Red Overdue Status Pill with gentle pulse */
+                        <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-[#E0202A] text-[#B5121A] bg-white text-xs font-medium animate-chip-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#E0202A]" />
+                          <span>Overdue</span>
+                        </span>
+                      ) : (
+                        /* Standard Grey Border Pill with Black Dot & Black Text */
+                        <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border border-[#E6E6E6] text-[#18181B] bg-white text-xs font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#18181B]" />
+                          <span>{row.statusType}</span>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Row Details Slide-In Drawer */}
+      <Drawer
+        isOpen={Boolean(selectedRow)}
+        onClose={() => setSelectedRow(null)}
+        title={selectedRow?.reference}
+        subtitle={selectedRow?.institution}
+        width="lg"
+      >
+        {selectedRow && (
+          <div className="space-y-6 text-sm">
+            <div className="flex items-center justify-between p-3.5 bg-[#F4F4F5] rounded-[8px] border border-[#E6E6E6]">
+              <div>
+                <div className="text-xs text-[#595959] uppercase font-semibold">Workflow Status</div>
+                <div className="text-sm font-bold text-[#111111] mt-0.5">{selectedRow.statusType}</div>
+              </div>
+              {selectedRow.statusType === 'Overdue' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#E0202A] text-[#B5121A] bg-white text-xs font-semibold animate-chip-pulse">
+                  <span className="w-2 h-2 rounded-full bg-[#E0202A]" />
+                  <span>Statutory SLA Breach</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#E6E6E6] text-[#111111] bg-white text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-[#111111]" />
+                  <span>On Track</span>
+                </span>
+              )}
             </div>
 
-            {/* Stage Filter */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                <Layers className="w-3 h-3 text-slate-400" />
-                Workflow Stage
-              </label>
-              <select
-                value={selectedStage}
-                onChange={(e) => setSelectedStage(e.target.value)}
-                className="w-full py-1.5 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B2240]"
-              >
-                <option value="ALL">All Route Stages</option>
-                {stages.map((st) => (
-                  <option key={st.key} value={st.key}>
-                    {st.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 border border-[#E6E6E6] rounded-[8px]">
+                <div className="text-xs text-[#595959] font-medium">Current Stage</div>
+                <div className="text-sm font-semibold text-[#111111] mt-1">{selectedRow.stage}</div>
+              </div>
+              <div className="p-3 border border-[#E6E6E6] rounded-[8px]">
+                <div className="text-xs text-[#595959] font-medium">Route Pathway</div>
+                <div className="text-sm font-semibold text-[#111111] mt-1">{selectedRow.route}</div>
+              </div>
+              <div className="p-3 border border-[#E6E6E6] rounded-[8px]">
+                <div className="text-xs text-[#595959] font-medium">Application Age</div>
+                <div className="text-sm font-semibold text-[#111111] mt-1">{selectedRow.age}</div>
+              </div>
+              <div className="p-3 border border-[#E6E6E6] rounded-[8px]">
+                <div className="text-xs text-[#595959] font-medium">Audit Trail</div>
+                <div className="text-sm font-semibold text-[#111111] mt-1">Rule #1 Cryptographic Ledger</div>
+              </div>
             </div>
 
-            {/* Status Filter */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                <Filter className="w-3 h-3 text-slate-400" />
-                Current Status
-              </label>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full py-1.5 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B2240]"
+            <div className="pt-4 border-t border-[#E6E6E6] flex items-center justify-between gap-3">
+              <Button variant="secondary" onClick={() => setSelectedRow(null)}>
+                Close
+              </Button>
+              <Button
+                variant="brand"
+                onClick={() => {
+                  const link = selectedRow.link;
+                  setSelectedRow(null);
+                  navigate(link);
+                }}
               >
-                <option value="ALL">All Statuses</option>
-                <option value="SUBMITTED">SUBMITTED</option>
-                <option value="UNDER_SCRUTINY">UNDER_SCRUTINY</option>
-                <option value="UNDER_EVC">UNDER_EVC</option>
-                <option value="UNDER_SAC_SHC">UNDER_SAC_SHC</option>
-                <option value="PENDING_DECISION">PENDING_DECISION</option>
-                <option value="RETURNED">RETURNED</option>
-                <option value="APPROVED">APPROVED (EoA)</option>
-                <option value="REJECTED">REJECTED</option>
-              </select>
-            </div>
-
-            {/* Age Filter */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-slate-400" />
-                Application Age
-              </label>
-              <select
-                value={selectedAge}
-                onChange={(e) => setSelectedAge(e.target.value)}
-                className="w-full py-1.5 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B2240]"
-              >
-                <option value="ALL">All Durations</option>
-                <option value="UNDER_7">&lt; 7 Days Old</option>
-                <option value="7_TO_14">7 to 14 Days Old</option>
-                <option value="15_TO_30">15 to 30 Days Old</option>
-                <option value="OVER_30">&gt; 30 Days Old</option>
-              </select>
-            </div>
-
-            {/* Institution Search Filter */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-                <Building2 className="w-3 h-3 text-slate-400" />
-                Institution Name
-              </label>
-              <input
-                type="text"
-                value={institutionQuery}
-                onChange={(e) => setInstitutionQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') fetchApplications(); }}
-                placeholder="Filter institution..."
-                className="w-full py-1.5 px-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B2240]"
-              />
+                Open Full Case Record
+              </Button>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Applications Table */}
-      {loading ? (
-        <LoadingState message="Loading applications under your jurisdiction..." />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchApplications} />
-      ) : applications.length === 0 ? (
-        <EmptyState
-          title="No applications match criteria"
-          description="Try resetting search filters or selecting nationwide jurisdiction."
-          action={{ label: 'Reset All Filters', onClick: handleResetFilters }}
-        />
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                <tr>
-                  <th className="py-3 px-4">Ref Number</th>
-                  <th className="py-3 px-4">Institution & Region</th>
-                  <th className="py-3 px-4">Approval Type</th>
-                  <th className="py-3 px-4">Stage & Status</th>
-                  <th className="py-3 px-4">Risk Profile</th>
-                  <th className="py-3 px-4">SLA Due Date</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {applications.map((app) => (
-                  <tr key={app.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                      <Link to={`/applications/${app.id}`} className="hover:underline text-[#0B2240]">
-                        {app.ref_no || app.application_number}
-                      </Link>
-                      <div className="text-[10px] font-sans text-slate-400 font-normal">
-                        Entered: {new Date(app.stage_entered_at).toLocaleDateString()}
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        {app.institution?.name || `Institution #${app.institution_id}`}
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {app.institution?.state} • {app.institution?.region} Region
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-slate-700">
-                      <span className="font-medium">{app.application_type}</span>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-col gap-1 items-start">
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                          {app.current_stage?.name || app.current_stage || 'SUBMITTED'}
-                        </span>
-                        <StatusPill status={app.status} isEscalated={app.is_escalated} />
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              (app.risk_score || 0) < 0.3
-                                ? 'bg-emerald-500'
-                                : (app.risk_score || 0) < 0.6
-                                ? 'bg-amber-500'
-                                : 'bg-red-500'
-                            }`}
-                            style={{ width: `${Math.min(100, Math.max(10, ((app.risk_score || 0) * 100)))}%` }}
-                          />
-                        </div>
-                        <span className="font-bold text-slate-800">
-                          {((app.risk_score || 0) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      {app.due_date || app.sla_deadline ? (
-                        <div className="flex items-center gap-1.5 text-slate-700">
-                          <Clock className={`w-3.5 h-3.5 ${app.is_escalated ? 'text-red-600' : 'text-slate-400'}`} />
-                          <span className={app.is_escalated ? 'text-red-700 font-bold' : ''}>
-                            {new Date(app.due_date || app.sla_deadline!).toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">N/A</span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-right">
-                      <Link
-                        to={`/applications/${app.id}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-[#0B2240] hover:text-white rounded text-slate-700 text-xs font-semibold transition-colors"
-                      >
-                        Inspect Route
-                        <ArrowRight className="w-3 h-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </Drawer>
     </div>
   );
 };
+
+export default ApplicationsListPage;

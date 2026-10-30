@@ -344,9 +344,9 @@ class EVCSchedule(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     application_id = Column(Integer, ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
-    scheduled_date = Column(DateTime, nullable=False)
-    status = Column(String(50), default="SCHEDULED", nullable=False)  # SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED, OVERDUE
-    committee_ids = Column(Text, nullable=False)                     # JSON list of user ids
+    scheduled_date = Column(DateTime, nullable=True)
+    status = Column(String(50), default="QUEUED", nullable=False)  # QUEUED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED, OVERDUE
+    committee_ids = Column(Text, default="[]", nullable=False)                     # JSON list of user ids
     due_date = Column(DateTime, nullable=False)
     completed_at = Column(DateTime, nullable=True)
     is_new_institution = Column(Boolean, default=False, nullable=False)

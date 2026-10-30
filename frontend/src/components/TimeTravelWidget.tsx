@@ -3,15 +3,14 @@ import {
   Clock,
   FastForward,
   RotateCcw,
-  Calendar,
   CheckCircle2,
   ChevronDown,
   X,
-  AlertTriangle,
   Zap
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { SystemClock } from '../types';
+import { Button } from './ui/Button';
 
 export const TimeTravelWidget: React.FC = () => {
   const [clock, setClock] = useState<SystemClock | null>(null);
@@ -50,9 +49,8 @@ export const TimeTravelWidget: React.FC = () => {
       });
       setClock(res.clock);
       setFeedback(
-        `Fast-forwarded +${days}d! Created ${res.evaluation.escalations_created} escalations & ${res.evaluation.notifications_created} notifications.`
+        `Fast-forwarded +${days}d. Created ${res.evaluation.escalations_created} escalations & ${res.evaluation.notifications_created} notifications.`
       );
-      // Notify other views to re-fetch live data
       window.dispatchEvent(new CustomEvent('time-travel-updated', { detail: res.clock }));
     } catch (err: any) {
       alert(`Time advance failed: ${err.message}`);
@@ -79,7 +77,7 @@ export const TimeTravelWidget: React.FC = () => {
       });
       setClock(res.clock);
       setFeedback(
-        `Jumped to ${customDate}! Evaluated alert engine (${res.evaluation.notifications_created} notifications).`
+        `Jumped to ${customDate}. Evaluated alerts (${res.evaluation.notifications_created} notifications).`
       );
       window.dispatchEvent(new CustomEvent('time-travel-updated', { detail: res.clock }));
     } catch (err: any) {
@@ -107,10 +105,10 @@ export const TimeTravelWidget: React.FC = () => {
   };
 
   const formatSimDate = (dateStr?: string) => {
-    if (!dateStr) return 'Loading...';
+    if (!dateStr) return '30 Oct 2026';
     try {
       const d = new Date(dateStr);
-      return d.toLocaleDateString('en-IN', {
+      return d.toLocaleDateString('en-GB', {
         day: 'numeric',
         month: 'short',
         year: 'numeric'
@@ -122,135 +120,106 @@ export const TimeTravelWidget: React.FC = () => {
 
   return (
     <div className="relative">
-      {/* Top Navbar Trigger Pill */}
-      <button
+      {/* Top Navbar Trigger Pill - High Contrast */}
+      <Button
+        size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-xs font-semibold text-amber-200 transition-all cursor-pointer shadow-inner"
-        title="Time-Travel Simulator for Evaluators & Hackathon Judges"
+        aria-label="Simulation clock control"
+        className="!h-10 !min-h-[40px] !rounded-[8px] px-3 flex items-center gap-1.5 font-sans"
       >
-        <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin-slow" />
-        <span className="hidden sm:inline text-amber-300 font-bold">Sim Time:</span>
-        <span className="text-white font-mono">{formatSimDate(clock?.simulated_date)}</span>
-        {clock?.is_simulated && (
-          <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded-full shadow-xs">
-            {clock.delta_days > 0 ? `+${Math.round(clock.delta_days)}d` : `${Math.round(clock.delta_days)}d`}
-          </span>
-        )}
-        <ChevronDown className="w-3 h-3 text-amber-400/80" />
-      </button>
+        <Clock className="w-3.5 h-3.5 text-white shrink-0" />
+        <span className="hidden sm:inline text-white/80 font-normal">Sim time: </span>
+        <span className="font-semibold text-white tabular-nums">{formatSimDate(clock?.simulated_date)}</span>
+        <ChevronDown className="w-3 h-3 text-white shrink-0" />
+      </Button>
 
       {/* Popover Drawer */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 text-slate-800 z-50 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-start justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center">
-                <FastForward className="w-4 h-4 text-amber-600" />
+        <div className="absolute right-0 mt-2 w-96 bg-white rounded-[8px] border border-[#E6E6E6] p-5 text-[#111111] z-50 animate-in fade-in duration-150">
+          <div className="flex items-start justify-between pb-3 border-b border-[#E6E6E6]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[8px] bg-[#F4F4F5] border border-[#E6E6E6] text-[#111111] flex items-center justify-center">
+                <FastForward className="w-4 h-4 text-[#111111]" />
               </div>
               <div>
-                <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wider">
+                <h4 className="font-bold text-xs text-[#111111] uppercase tracking-wider">
                   Demo Time-Travel Controller
                 </h4>
-                <p className="text-[11px] text-slate-500">
-                  SIH 2026 Evaluation Tool (PS 26262)
+                <p className="text-[11px] text-[#595959]">
+                  Simulated System Clock Controller
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <Button variant="quiet" size="icon" aria-label="Close" onClick={() => setIsOpen(false)}><X className="w-4 h-4" /></Button>
           </div>
 
-          <div className="mt-3 bg-slate-50 rounded-xl p-3 border border-slate-200/80">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          <div className="mt-3.5 bg-[#F4F4F5] rounded-[8px] p-3.5 border border-[#E6E6E6]">
+            <span className="text-[10px] font-bold text-[#595959] uppercase tracking-wider block">
               Active System Clock
             </span>
-            <div className="font-mono text-sm font-bold text-slate-900 mt-0.5">
+            <div className="font-mono text-sm font-bold text-[#111111] mt-0.5">
               {clock?.simulated_date ? new Date(clock.simulated_date).toUTCString() : 'Loading...'}
             </div>
-            <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-600">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-              <span>
+            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#595959]">
+              <span className={`inline-block w-2 h-2 rounded-full ${clock?.is_simulated ? 'bg-[#B5121A]' : 'bg-[#18181B]'}`} />
+              <span className="font-medium text-[#111111]">
                 {clock?.is_simulated
-                  ? `Simulating future timestamp (${Math.round(clock.delta_days)} days ahead)`
+                  ? `Simulating future timestamp (+${Math.round(clock.delta_days)} days ahead)`
                   : 'Synchronized with real wall clock'}
               </span>
             </div>
           </div>
 
           {feedback && (
-            <div className="mt-2.5 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="mt-3 p-2.5 bg-[#F4F4F5] border border-[#E6E6E6] rounded-[8px] text-xs text-[#111111] flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#111111] shrink-0 mt-0.5" />
               <span className="leading-tight">{feedback}</span>
             </div>
           )}
 
           {/* Quick Fast-Forward Buttons */}
-          <div className="mt-3">
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+          <div className="mt-3.5">
+            <label className="text-[11px] font-bold text-[#595959] uppercase tracking-wider block mb-1.5">
               Quick Fast-Forward Simulation
             </label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-4 gap-2">
               {[
                 { label: '+1 Day', days: 1 },
                 { label: '+3 Days', days: 3 },
                 { label: '+7 Days', days: 7 },
                 { label: '+30 Days', days: 30 }
               ].map((btn) => (
-                <button
-                  key={btn.days}
-                  onClick={() => handleAdvance(btn.days)}
-                  disabled={loading}
-                  className="px-2 py-2 bg-slate-100 hover:bg-amber-50 hover:border-amber-300 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:text-amber-900 cursor-pointer transition-all disabled:opacity-50 text-center"
-                >
-                  {btn.label}
-                </button>
+                <Button key={btn.days} variant="secondary" size="sm" disabled={loading} onClick={() => handleAdvance(btn.days)} className="text-center">{btn.label}</Button>
               ))}
             </div>
           </div>
 
           {/* Jump to Specific Date */}
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+          <div className="mt-3.5 pt-3.5 border-t border-[#E6E6E6]">
+            <label className="text-[11px] font-bold text-[#595959] uppercase tracking-wider block mb-1.5">
               Jump to Specific Calendar Date
             </label>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={customDate}
                 onChange={(e) => setCustomDate(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                className="flex-1 px-3 py-1.5 border border-[#E6E6E6] rounded-[8px] text-xs text-[#111111] bg-white focus:outline-none focus:border-[#111111]"
               />
-              <button
-                onClick={handleSetDate}
-                disabled={loading || !customDate}
-                className="px-3 py-1.5 bg-[#0B2240] hover:bg-[#12315a] disabled:opacity-50 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-xs"
-              >
-                Jump
-              </button>
+              <Button variant="primary" size="sm" loading={loading} disabled={!customDate} onClick={handleSetDate}>Apply</Button>
             </div>
           </div>
 
           {/* Reset Button & Info */}
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <button
-              onClick={handleReset}
-              disabled={loading}
-              className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-rose-600 font-medium cursor-pointer transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset to Wall Clock
-            </button>
-            <span className="text-[10px] text-slate-400">
+          <div className="mt-3.5 pt-3.5 border-t border-[#E6E6E6] flex items-center justify-between">
+            <Button size="sm" loading={loading} onClick={handleReset}><RotateCcw className="w-3.5 h-3.5 mr-1 text-white" />Reset</Button>
+            <span className="text-[10px] text-[#595959]">
               Evaluates SLA & Ladders
             </span>
           </div>
 
-          <div className="mt-2.5 text-[10px] text-slate-500 bg-amber-50/60 p-2 rounded-lg border border-amber-200/60 flex items-start gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="mt-3 text-[10px] text-[#595959] bg-[#F4F4F5] p-2.5 rounded-[8px] border border-[#E6E6E6] flex items-start gap-1.5 leading-relaxed">
+            <Zap className="w-3.5 h-3.5 text-[#111111] shrink-0 mt-0.5" />
             <span>
               Advancing time immediately triggers the SLA engine, cascades overdue stages up the escalation ladder, and flags expired leases.
             </span>
@@ -260,4 +229,3 @@ export const TimeTravelWidget: React.FC = () => {
     </div>
   );
 };
-
